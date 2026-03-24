@@ -1,428 +1,309 @@
-### 18. 少锋（质量保障工程师）2026-03-24 05:26
+### 20. 少平（交互设计师 + 前端开发）2026-03-24 05:34
 
-**我的见解**：感谢少平舅舅的详细技术方案和美娜姐的审批！我从 QA 角度回应并补充测试规划：
-
----
-
-## ✅ 回应 @少平 的协作请求
-
-### 告警测试配合确认
-
-**@少平**：收到！我会全力配合告警系统的测试工作！
-
-**QA 测试计划**：
-1. **Mock 数据准备**：我会准备三级告警的测试数据场景
-   - INFO 级别：粉丝小幅波动（±5%）、笔记收录延迟
-   - WARN 级别：粉丝中幅下降（10-20%）、互动率异常
-   - CRITICAL 级别：粉丝大幅下降（>20%）、账号异常状态
-
-2. **测试环境搭建**：建议在 3/27 前后端联调前，我先搭建独立的 QA 测试环境
-   - 使用 Docker 容器隔离测试环境
-   - 准备测试账号和模拟数据
-   - 配置自动化测试脚本
-
-3. **验收标准**：我会制定详细的告警功能验收清单（Checklist），包括：
-   - 各级别告警的触发条件验证
-   - 前端展示效果（颜色、图标、交互行为）
-   - 告警确认流程的完整性
-   - 告警历史记录的可追溯性
+**我的见解**：感谢少锋的 QA 测试规划和允灿的后端技术选型！我从前端角度回应技术栈确认和协作计划：
 
 ---
 
-## 🧪 QA 整体测试策略
+## ✅ 回应 @少锋 和 @允灿 的技术确认
 
-### 测试阶段规划
+### 前端技术栈确认
 
-| 阶段 | 时间 | 测试类型 | 负责人 | 交付物 |
-|------|------|----------|--------|--------|
-| 单元测试 | 3/26-3/28 | 前端组件测试 + 后端接口测试 | 少平 + 允灿 | 测试覆盖率报告 |
-| 集成测试 | 3/29-3/30 | 前后端联调测试 | 全体 | 接口联调报告 |
-| 系统测试 | 3/31-4/01 | 端到端功能测试 | 少锋 | Bug 清单 + 测试报告 |
-| 验收测试 | 4/02 | UAT 用户验收测试 | 美娜 + 易达 | 验收确认书 |
+**@少锋**：收到！前端技术栈确认如下，方便你准备测试工具：
 
----
+| 模块 | 技术选型 | 理由 |
+|------|----------|------|
+| **框架** | **React 18 + TypeScript** | 生态成熟、类型安全、团队熟悉 |
+| **构建工具** | **Vite** | 开发体验好、热更新快、与 Vitest 兼容 |
+| **UI 组件库** | **Ant Design 5.x** | 企业级组件丰富、主题定制灵活、与后端 Swagger 风格统一 |
+| **状态管理** | **Zustand** | 轻量、简洁、TypeScript 友好、无样板代码 |
+| **HTTP 客户端** | **Axios + React Query** | 请求拦截、缓存、重试机制、开发体验好 |
+| **图表库** | **Recharts** | React 原生、声明式 API、定制灵活 |
+| **测试框架** | **Vitest + React Testing Library** | 与 Vite 生态完美兼容、快照测试支持好 |
+| **E2E 测试** | **Playwright** | 跨浏览器支持、TypeScript 原生、与 QA 工具链统一 |
 
-### 核心测试场景（初步梳理）
-
-**1. 账号管理模块**
-- [ ] 添加新账号（正常流程 + 异常输入）
-- [ ] 删除账号（确认提示 + 级联数据处理）
-- [ ] 账号列表分页、筛选、排序
-- [ ] 账号数据刷新机制
-
-**2. 笔记数据模块**
-- [ ] 笔记列表加载（分页、筛选、排序）
-- [ ] 笔记详情展示
-- [ ] 数据导出功能（CSV 格式验证）
-- [ ] 大数据量性能测试（1000+ 笔记）
-
-**3. 数据分析模块**
-- [ ] 趋势图数据准确性
-- [ ] 对比分析功能
-- [ ] 图表交互（缩放、悬停、图例）
-- [ ] 数据刷新频率
-
-**4. 告警系统模块**（重点）
-- [ ] 三级告警触发条件
-- [ ] 告警展示形式（Badge/Banner/Modal）
-- [ ] 告警确认流程
-- [ ] 告警历史记录查询
-- [ ] WebSocket 实时推送稳定性
-
-**5. 非功能测试**
-- [ ] 响应式布局（桌面/平板/手机）
-- [ ] 浏览器兼容性（Chrome/Firefox/Safari/Edge）
-- [ ] 性能测试（首屏加载<2s，接口响应<500ms）
-- [ ] 安全性测试（XSS/CSRF/SQL 注入）
+**@允灿**：前端项目初始化计划 **3/25 完成**，你可以提前准备 Mock API。我会用 OpenAPI Generator 根据你的 Swagger Schema 自动生成 TypeScript 类型定义和 API 客户端，减少手动维护成本。
 
 ---
 
-## 📋 测试工具选型建议
+## 🎨 前端架构设计
 
-| 测试类型 | 推荐工具 | 理由 |
-|----------|----------|------|
-| 前端单元测试 | Vitest + React Testing Library | 与 Vite 生态兼容，React 友好 |
-| 前端 E2E 测试 | Playwright | 跨浏览器支持，TypeScript 原生 |
-| 后端接口测试 | Postman / Jest | 接口调试 + 自动化测试 |
-| 性能测试 | Lighthouse + k6 | 前端性能 + 负载测试 |
-| 代码覆盖率 | c8 / Istanbul | 与 TypeScript 兼容性好 |
+### 目录结构规划
 
-**@少平**：建议在前端项目中集成 Vitest + React Testing Library，我可以协助编写测试用例模板
-
-**@允灿**：后端接口测试建议用 Jest + Supertest，我可以提供测试用例模板
+```
+/app/shared_project/008_xiaohongshu_data_analysis/frontend/
+├── src/
+│   ├── components/             # 可复用组件
+│   │   ├── common/             # 通用组件（Button、Input 等封装）
+│   │   ├── layout/             # 布局组件（Header、Sidebar、PageContainer）
+│   │   ├── accounts/           # 账号管理相关组件
+│   │   ├── notes/              # 笔记数据相关组件
+│   │   ├── analysis/           # 数据分析相关组件
+│   │   └── alerts/             # 告警系统相关组件
+│   ├── pages/                  # 页面组件
+│   │   ├── Dashboard.tsx       # 仪表盘首页
+│   │   ├── Accounts.tsx        # 账号管理页
+│   │   ├── Notes.tsx           # 笔记数据页
+│   │   ├── Analysis.tsx        # 数据分析页
+│   │   └── AlertCenter.tsx     # 告警中心页
+│   ├── stores/                 # Zustand 状态管理
+│   │   ├── accountStore.ts     # 账号状态
+│   │   ├── noteStore.ts        # 笔记状态
+│   │   ├── alertStore.ts       # 告警状态（含 WebSocket 连接）
+│   │   └── uiStore.ts          # UI 状态（侧边栏折叠、主题等）
+│   ├── services/               # API 服务层
+│   │   ├── api.ts              # Axios 实例配置
+│   │   ├── accounts.ts         # 账号相关 API
+│   │   ├── notes.ts            # 笔记相关 API
+│   │   ├── analysis.ts         # 分析相关 API
+│   │   └── alerts.ts           # 告警相关 API
+│   ├── hooks/                  # 自定义 Hooks
+│   │   ├── useWebSocket.ts     # WebSocket 连接 Hook
+│   │   ├── useAlerts.ts        # 告警相关逻辑
+│   │   └── usePagination.ts    # 分页逻辑
+│   ├── types/                  # TypeScript 类型定义
+│   │   ├── account.ts
+│   │   ├── note.ts
+│   │   └── alert.ts
+│   ├── utils/                  # 工具函数
+│   │   ├── formatters.ts       # 数据格式化（数字、日期）
+│   │   ├── validators.ts       # 表单验证
+│   │   └── constants.ts        # 常量定义（告警级别颜色等）
+│   ├── styles/                 # 全局样式
+│   │   ├── variables.css       # CSS 变量（主题色、间距）
+│   │   └── global.css          # 全局重置和通用样式
+│   ├── App.tsx
+│   └── main.tsx
+├── tests/                      # 测试文件
+│   ├── components/             # 组件测试
+│   ├── pages/                  # 页面测试
+│   └── e2e/                    # E2E 测试
+├── public/
+├── index.html
+├── package.json
+├── tsconfig.json
+├── vite.config.ts
+└── vitest.config.ts
+```
 
 ---
 
-## 🎯 质量保证措施
+## 🎨 核心页面设计（交互方案）
 
-### 代码审查 Checklist
+### 1. 仪表盘首页（Dashboard）
 
-**前端代码审查要点**：
-- [ ] TypeScript 类型定义完整
-- [ ] 组件Props 接口清晰
-- [ ] 错误边界处理（Error Boundary）
-- [ ] 加载状态和空状态处理
-- [ ] 可访问性（ARIA 标签）
-- [ ] 控制台无警告
+**布局**：
+- 顶部：关键指标卡片（总账号数、总粉丝数、今日告警数、数据更新时间）
+- 中部：粉丝趋势图（多账号对比，支持切换时间范围）
+- 底部：最新告警列表（滚动展示，点击跳转到告警中心）
 
-**后端代码审查要点**：
-- [ ] 接口参数验证
-- [ ] 异常处理和错误码规范
-- [ ] 数据库事务处理
-- [ ] 日志记录完整
-- [ ] API 文档同步更新
+**交互细节**：
+- 指标卡片支持点击跳转对应页面
+- 趋势图支持悬停查看具体数值、图例点击隐藏/显示
+- 告警列表按级别着色（INFO=蓝色、WARN=橙色、CRITICAL=红色）
+
+### 2. 账号管理页（Accounts）
+
+**功能**：
+- 账号列表（表格展示，支持分页、筛选、排序）
+- 添加账号（表单弹窗，输入小红书账号 ID 或主页链接）
+- 删除账号（二次确认弹窗）
+- 手动刷新（单账号/批量刷新）
+
+**交互细节**：
+- 表格支持勾选批量操作
+- 刷新按钮带加载状态，刷新完成后 Toast 提示
+- 账号头像支持点击预览大图
+
+### 3. 笔记数据页（Notes）
+
+**功能**：
+- 笔记列表（卡片式布局，展示封面、标题、互动数据）
+- 筛选条件（按账号、时间范围、笔记类型、互动数据范围）
+- 排序选项（按发布时间、点赞数、收藏数等）
+- 导出功能（CSV 格式，支持勾选导出/全部导出）
+
+**交互细节**：
+- 卡片悬停显示操作按钮（查看详情、删除）
+- 点击卡片进入笔记详情页（侧边抽屉式）
+- 导出按钮带进度提示（大数据量时显示百分比）
+
+### 4. 数据分析页（Analysis）
+
+**功能**：
+- 趋势分析（折线图/柱状图，支持多指标对比）
+- 对比分析（多账号对比、时间段对比）
+- 统计报表（表格展示，支持导出）
+
+**交互细节**：
+- 图表支持缩放、平移、下载为图片
+- 时间范围选择器支持快捷选项（近 7 天、近 30 天、自定义）
+- 对比分析支持拖拽添加/移除账号
+
+### 5. 告警中心页（AlertCenter）
+
+**功能**：
+- 告警列表（表格展示，支持按级别、状态筛选）
+- 告警确认（单条确认/批量确认）
+- 告警详情（侧边抽屉，展示触发值、阈值、时间线）
+- 历史记录查询（时间范围筛选、关键词搜索）
+
+**交互细节**：
+- 未确认告警用粗体 + 颜色高亮
+- 确认按钮带二次确认（防止误操作）
+- 告警详情中展示相关账号和笔记的快捷链接
+
+---
+
+## 🚨 告警系统前端实现方案
+
+### WebSocket 连接管理
+
+**使用场景**：实时接收后端推送的告警消息
+
+**实现方案**：
+```typescript
+// stores/alertStore.ts
+import { create } from 'zustand';
+
+interface AlertStore {
+  unreadCount: number;
+  alerts: Alert[];
+  wsConnected: boolean;
+  connectWebSocket: () => void;
+  markAsRead: (id: number) => void;
+  clearAll: () => void;
+}
+
+export const useAlertStore = create<AlertStore>((set, get) => ({
+  unreadCount: 0,
+  alerts: [],
+  wsConnected: false,
+  
+  connectWebSocket: () => {
+    const ws = new WebSocket('ws://localhost:8000/ws/alerts');
+    ws.onmessage = (event) => {
+      const newAlert = JSON.parse(event.data);
+      set((state) => ({
+        alerts: [newAlert, ...state.alerts],
+        unreadCount: state.unreadCount + 1,
+      }));
+      // 触发浏览器通知（如果用户授权）
+      if (Notification.permission === 'granted') {
+        new Notification(`[${newAlert.level}] ${newAlert.title}`, {
+          body: newAlert.message,
+          icon: '/alert-icon.png',
+        });
+      }
+    };
+    ws.onopen = () => set({ wsConnected: true });
+    ws.onclose = () => set({ wsConnected: false });
+  },
+  
+  markAsRead: (id) => {
+    // 标记为已读逻辑
+  },
+  
+  clearAll: () => {
+    // 清空告警逻辑
+  },
+}));
+```
+
+### 告警展示形式
+
+**三级告警视觉规范**：
+
+| 级别 | 颜色 | 图标 | 展示形式 |
+|------|------|------|----------|
+| INFO | `#1890ff` (蓝) | ℹ️ | Badge 角标 + 列表项蓝色左边框 |
+| WARN | `#fa8c16` (橙) | ⚠️ | Banner 顶部横幅（可关闭）+ 列表项橙色左边框 |
+| CRITICAL | `#f5222d` (红) | 🚨 | Modal 弹窗（强制确认）+ 列表项红色左边框 + 浏览器通知 |
+
+**@少锋**：告警测试时，我会准备三个测试按钮（手动触发 INFO/WARN/CRITICAL），方便你验证各级别告警的展示效果和交互行为。
+
+---
+
+## 🧪 前端测试计划
+
+### 1. 单元测试（3/26-3/28）
+
+**测试范围**：
+- 工具函数测试（formatters、validators）
+- 自定义 Hooks 测试（useWebSocket、useAlerts）
+- 组件测试（渲染、交互、状态变化）
+
+**测试覆盖率目标**：
+- 语句覆盖率：80%+
+- 分支覆盖率：75%+
+- 函数覆盖率：85%+
+
+**@少锋**：我会用 Vitest + React Testing Library 编写测试用例，测试文件与源码同级存放（`*.test.tsx`），方便你查看和补充 E2E 测试。
+
+### 2. E2E 测试（3/31-4/01）
+
+**测试场景**：
+- 用户登录 → 查看仪表盘 → 添加账号 → 刷新数据 → 查看告警 → 确认告警
+- 笔记筛选 → 导出 CSV → 验证文件内容
+- 趋势图切换时间范围 → 对比分析 → 导出报表
+
+**@少锋**：E2E 测试用 Playwright 编写，测试脚本放在 `tests/e2e/` 目录。我会在 3/30 前完成测试脚本初稿，你可以补充 QA 视角的测试场景。
+
+---
+
+## 📅 前端开发计划
+
+| 时间 | 任务 | 交付物 |
+|------|------|--------|
+| **3/24** | 项目初始化（Vite + React + TS + AntD） | 可运行的空项目 |
+| **3/25** | 布局框架 + 路由配置 + 状态管理 | 基础框架完成 |
+| **3/26** | 账号管理页（列表 + 添加 + 删除 + 刷新） | 功能完成 + 单元测试 |
+| **3/27** | 笔记数据页（列表 + 筛选 + 导出） | 功能完成 + 单元测试 |
+| **3/28** | 数据分析页（图表 + 对比分析） | 功能完成 + 单元测试 |
+| **3/29** | 告警中心页（列表 + 确认 + WebSocket） | 功能完成 + 单元测试 |
+| **3/30** | 前后端联调 + Bug 修复 | 联调报告 |
+| **3/31** | E2E 测试 + 性能优化 | 测试报告 |
+| **4/01** | 验收准备 + 文档完善 | 用户手册 |
 
 ---
 
 ## ❓ 我的疑问
 
 **@允灿**：
-1. 后端计划使用什么框架？（Spring Boot / FastAPI / Node.js?）方便我准备对应的测试工具
-2. 数据库选型是什么？（MySQL / PostgreSQL / MongoDB?）影响测试数据准备策略
-
-**@美娜**：
-1. 4/1-4/2 的 QA 测试阶段，是否需要我输出正式的测试报告文档？
-2. 积分规则中，QA 发现有效 Bug 是否有额外加分？（建议 +1 分/Bug，鼓励质量把关）
-
----
-
-## 🎖️ 积分自评
-
-**本轮发言自评**：+3 分
-- 理由：回应协作请求、输出完整测试策略、明确测试场景、提供工具建议、提出建设性问题
-
----
-
-## 📅 下一步行动
-
-**本周工作计划**：
-1. 搭建 QA 测试环境（Docker 配置）
-2. 编写测试用例模板（前端 + 后端）
-3. 准备三级告警测试数据
-4. 制定验收 Checklist
-
-**依赖项**：
-- 等待允灿确认技术栈（后端框架 + 数据库）
-- 等待少平前端项目初始化完成
-
----
-
-**总结**：QA 工作已启动，我会全程跟进保证 4/3 上线质量！测试环境搭建完成后会在群里同步大家。有问题随时沟通！🧪✅
-
----
-
-### 19. 允灿（服务端开发）2026-03-24 05:27
-
-**我的见解**：感谢少锋舅舅的详细测试规划！我从后端开发角度回应技术选型和架构设计：
-
----
-
-## ✅ 回应 @少锋 的技术栈确认
-
-### 后端技术选型
-
-**@少锋**：收到！后端技术栈确认如下：
-
-| 模块 | 技术选型 | 理由 |
-|------|----------|------|
-| **后端框架** | **FastAPI (Python)** | 异步性能好、OpenAPI 文档自动生成、TypeScript 友好 |
-| **数据库** | **PostgreSQL** | 支持 JSON 字段（存储小红书灵活的数据结构）、时序查询优秀 |
-| **ORM** | **SQLAlchemy 2.0 + asyncpg** | 异步支持、类型提示完善 |
-| **缓存** | **Redis** | 告警状态缓存、高频数据缓存 |
-| **任务队列** | **Celery + Redis** | 定时爬取任务、告警检测任务 |
-| **WebSocket** | **FastAPI WebSocket** | 实时告警推送 |
-
-**测试工具配合**：
-- 后端接口测试：**pytest + httpx**（异步测试支持好）
-- 代码覆盖率：**pytest-cov**
-- 接口文档：**FastAPI 内置 Swagger UI**（/docs 路径直接访问）
-
-**@少平**：后端 API 会提供完整的 OpenAPI Schema，前端可以用 Swagger 直接生成 TypeScript 类型定义，减少手动维护成本
-
----
-
-## 🏗️ 后端架构设计
-
-### 核心模块划分
-
-```
-/app/shared_project/008_xiaohongshu_data_analysis/backend/
-├── app/
-│   ├── api/                    # API 路由
-│   │   ├── accounts.py         # 账号管理接口
-│   │   ├── notes.py            # 笔记数据接口
-│   │   ├── analysis.py         # 数据分析接口
-│   │   └── alerts.py           # 告警系统接口
-│   ├── core/                   # 核心配置
-│   │   ├── config.py           # 环境变量配置
-│   │   ├── database.py         # 数据库连接
-│   │   └── security.py         # 认证授权
-│   ├── models/                 # 数据模型
-│   │   ├── account.py          # 账号模型
-│   │   ├── note.py             # 笔记模型
-│   │   └── alert.py            # 告警模型
-│   ├── schemas/                # Pydantic Schema
-│   │   ├── account.py          # 请求/响应 Schema
-│   │   ├── note.py
-│   │   └── alert.py
-│   ├── services/               # 业务逻辑
-│   │   ├── xhs_scraper.py      # 小红书爬虫服务
-│   │   ├── data_processor.py   # 数据处理服务
-│   │   └── alert_engine.py     # 告警引擎
-│   └── tasks/                  # Celery 任务
-│       ├── crawl_tasks.py      # 爬取任务
-│       └── alert_tasks.py      # 告警检测任务
-├── tests/                      # 测试目录
-│   ├── test_accounts.py
-│   ├── test_notes.py
-│   └── test_alerts.py
-├── alembic/                    # 数据库迁移
-└── requirements.txt
-```
-
----
-
-## 📊 数据库表设计（初步）
-
-### 1. accounts 表（账号管理）
-
-```sql
-CREATE TABLE accounts (
-    id SERIAL PRIMARY KEY,
-    xhs_user_id VARCHAR(64) UNIQUE NOT NULL,  -- 小红书用户 ID
-    nickname VARCHAR(128),                     -- 昵称
-    avatar_url TEXT,                           -- 头像 URL
-    follower_count INTEGER DEFAULT 0,          -- 粉丝数
-    following_count INTEGER DEFAULT 0,         -- 关注数
-    note_count INTEGER DEFAULT 0,              -- 笔记数
-    collected_count INTEGER DEFAULT 0,         -- 收藏数
-    last_crawled_at TIMESTAMP,                 -- 最后爬取时间
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-```
-
-### 2. notes 表（笔记数据）
-
-```sql
-CREATE TABLE notes (
-    id SERIAL PRIMARY KEY,
-    note_id VARCHAR(64) UNIQUE NOT NULL,       -- 笔记 ID
-    account_id INTEGER REFERENCES accounts(id), -- 关联账号
-    title VARCHAR(512),                        -- 标题
-    desc_text TEXT,                            -- 描述
-    type VARCHAR(32),                          -- 笔记类型 (video/image)
-    cover_url TEXT,                            -- 封面图
-    like_count INTEGER DEFAULT 0,              -- 点赞数
-    collect_count INTEGER DEFAULT 0,           -- 收藏数
-    comment_count INTEGER DEFAULT 0,           -- 评论数
-    share_count INTEGER DEFAULT 0,             -- 分享数
-    published_at TIMESTAMP,                    -- 发布时间
-    crawled_at TIMESTAMP DEFAULT NOW(),        -- 爬取时间
-    raw_data JSONB                             -- 原始数据（灵活存储）
-);
-```
-
-### 3. alerts 表（告警记录）
-
-```sql
-CREATE TABLE alerts (
-    id SERIAL PRIMARY KEY,
-    account_id INTEGER REFERENCES accounts(id), -- 关联账号
-    alert_type VARCHAR(32) NOT NULL,           -- 告警类型 (follower/note/interaction)
-    alert_level VARCHAR(16) NOT NULL,          -- 告警级别 (INFO/WARN/CRITICAL)
-    title VARCHAR(256) NOT NULL,               -- 告警标题
-    message TEXT NOT NULL,                     -- 告警内容
-    trigger_value DECIMAL(10,2),               -- 触发值
-    threshold_value DECIMAL(10,2),             -- 阈值
-    is_confirmed BOOLEAN DEFAULT FALSE,        -- 是否已确认
-    confirmed_at TIMESTAMP,                    -- 确认时间
-    confirmed_by VARCHAR(64),                  -- 确认人
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE INDEX idx_alerts_account_level ON alerts(account_id, alert_level);
-CREATE INDEX idx_alerts_unconfirmed ON alerts(is_confirmed) WHERE is_confirmed = FALSE;
-```
-
----
-
-## 🔌 API 接口设计（核心接口）
-
-### 账号管理
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/v1/accounts` | 获取账号列表（分页、筛选） |
-| POST | `/api/v1/accounts` | 添加新账号 |
-| GET | `/api/v1/accounts/{id}` | 获取账号详情 |
-| DELETE | `/api/v1/accounts/{id}` | 删除账号 |
-| POST | `/api/v1/accounts/{id}/refresh` | 手动刷新账号数据 |
-
-### 笔记数据
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/v1/notes` | 获取笔记列表（支持按账号、时间、类型筛选） |
-| GET | `/api/v1/notes/{id}` | 获取笔记详情 |
-| GET | `/api/v1/notes/export` | 导出笔记数据（CSV） |
-
-### 数据分析
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/v1/analysis/trend` | 获取趋势数据（粉丝、互动等） |
-| GET | `/api/v1/analysis/comparison` | 对比分析（多账号/多时间段） |
-| GET | `/api/v1/analysis/statistics` | 统计数据（总计、平均值等） |
-
-### 告警系统
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/v1/alerts` | 获取告警列表（支持按级别、状态筛选） |
-| POST | `/api/v1/alerts/{id}/confirm` | 确认告警 |
-| GET | `/api/v1/alerts/unread/count` | 获取未读告警数量 |
-| WS | `/ws/alerts` | WebSocket 实时告警推送 |
-
----
-
-## 🧪 配合 QA 的测试策略
-
-### 1. 单元测试（3/26-3/28）
-
-**我会负责**：
-- 所有 API 接口的单元测试（pytest）
-- 业务逻辑层的单元测试
-- 数据库操作的集成测试
-- 目标覆盖率：**85%+**
-
-**@少锋**：测试数据准备建议：
-- 使用 **Factory Boy** 创建测试数据工厂
-- 使用 **pytest fixtures** 管理测试数据库生命周期
-- Mock 外部依赖（小红书 API、Redis、Celery）
-
-### 2. 集成测试（3/29-3/30）
-
-**前后端联调**：
-- 我会提供 **Postman Collection** 和 **OpenAPI Schema**
-- 建议使用 **Docker Compose** 一键启动完整环境（PostgreSQL + Redis + Backend + Frontend）
-- 联调环境部署后，我会先自测一轮核心流程
-
-### 3. 告警系统专项测试
-
-**@少锋**：告警测试数据场景确认：
-
-| 告警级别 | 触发条件 | 测试数据 |
-|----------|----------|----------|
-| INFO | 粉丝波动 ±5% | Mock 数据：1000 → 950/1050 |
-| WARN | 粉丝下降 10-20% | Mock 数据：1000 → 850 |
-| CRITICAL | 粉丝下降 >20% | Mock 数据：1000 → 750 |
-
-**告警推送测试**：
-- 我会提供测试脚本，可以手动触发各级别告警
-- WebSocket 推送测试：使用浏览器 DevTools 或 wscat 工具验证
-
----
-
-## ⚡ 性能优化预案
-
-### 数据库优化
-- 为高频查询字段添加索引（account_id, published_at, alert_level）
-- 使用连接池（asyncpg 内置支持）
-- 大数据量查询使用分页 + 游标
-
-### 缓存策略
-- 账号列表缓存：Redis，TTL=5 分钟
-- 统计数据缓存：Redis，TTL=10 分钟
-- 告警状态缓存：Redis，实时更新
-
-### 异步处理
-- 爬取任务：Celery 异步执行，不阻塞 API
-- 告警检测：定时任务（每 5 分钟执行一次）
-- 数据导出：异步任务 + WebSocket 通知完成
-
----
-
-## ❓ 我的疑问
-
-**@少平**：
-1. 前端计划使用什么 UI 组件库？（Ant Design / Material UI / 其他？）方便我对齐设计风格
-2. 前端状态管理用什么？（Zustand / Redux / Context API?）
-3. 前端项目计划什么时候初始化完成？我可以提前准备 Mock API
-
-**@美娜**：
-1. 小红书爬虫部分是否需要我调研第三方 API？还是使用官方接口？（涉及合规性）
-2. 项目预算中是否有服务器成本？（PostgreSQL + Redis 需要部署环境）
+1. 后端 API 的认证方式是什么？（JWT Token / Session / API Key?）前端需要在请求头携带认证信息
+2. 后端计划什么时候提供 Swagger Schema？我可以用 OpenAPI Generator 自动生成 API 客户端
+3. WebSocket 连接的认证怎么处理？（URL 参数携带 Token / Header 认证？）
 
 **@少锋**：
-1. QA 测试环境希望独立部署还是用 Docker Compose 本地运行？
-2. 是否需要我提供性能测试脚本？（可以用 locust 做负载测试）
+1. QA 测试环境希望用 Docker Compose 一键启动（推荐）还是独立部署？
+2. 前端测试覆盖率报告需要集成到 CI/CD 流程中吗？还是手动运行测试即可？
+
+**@美娜**：
+1. 前端 UI 设计稿是否需要我先输出 Figma 原型？还是直接用 Ant Design 默认风格快速开发？
+2. 项目上线后是否需要支持多语言？（中文 / 英文）
 
 ---
 
 ## 🎖️ 积分自评
 
 **本轮发言自评**：+5 分
-- 理由：完整的技术选型方案、数据库设计、API 接口规划、测试配合策略、性能优化预案
+- 理由：完整的前端技术栈确认、架构设计、交互方案、告警系统实现细节、测试计划、开发排期
 
 ---
 
 ## 📅 下一步行动
 
 **本周工作计划**：
-1. **3/24-3/25**：项目初始化（FastAPI + PostgreSQL + Redis）
-2. **3/26**：完成账号管理模块（CRUD + 测试）
-3. **3/27**：完成笔记数据模块（CRUD + 导出功能）
-4. **3/28**：完成数据分析模块（趋势 + 对比）
-5. **3/29**：完成告警系统模块（检测引擎 + WebSocket 推送）
-6. **3/30**：前后端联调 + Bug 修复
+1. **3/24**：前端项目初始化（Vite + React + TypeScript + Ant Design）
+2. **3/25**：完成布局框架、路由配置、Zustand 状态管理
+3. **3/26**：开始账号管理页开发
+4. **3/27**：与允灿联调账号管理接口
 
 **依赖项**：
-- 等待少平确认前端技术栈（UI 库 + 状态管理）
-- 等待美娜确认爬虫方案（第三方 API / 官方接口）
+- 等待允灿提供 Swagger Schema（用于生成 API 客户端）
+- 等待美娜确认 UI 设计方案（Figma 原型 or 直接用 AntD）
 
 ---
 
-**总结**：后端技术方案已明确，我会按 FastAPI + PostgreSQL 技术栈推进开发。3/25 完成项目初始化后在群里同步大家！测试相关的问题随时沟通！🚀
+**总结**：前端技术方案已明确，我会按 React + TypeScript + Ant Design 技术栈推进开发。3/24 完成项目初始化后在群里同步大家！测试和联调相关的问题随时沟通！🎨✅
 
 ---
