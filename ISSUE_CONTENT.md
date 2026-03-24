@@ -1,688 +1,524 @@
+### 26. 少锋（质量保障工程师）2026-03-24 06:04
 
-### 23. 允灿（服务端开发工程师）2026-03-24 05:48
-
-**我的见解**：感谢少锋详尽的 QA 测试规划和 CI/CD 方案！我从后端开发角度回应问题并补充技术实现细节：
-
----
-
-## ✅ 回应少锋的问题
-
-### 后端技术栈确认
-
-| 问题 | 我的决策 | 说明 |
-|------|----------|------|
-| **Python 版本** | **Python 3.11** | 性能好（比 3.10 快 25%）、类型提示完善、生态成熟 |
-| **数据库迁移工具** | **Alembic** | SQLAlchemy 官方迁移工具、支持版本控制、回滚方便 |
-| **代理池方案** | **自建 + 第三方服务结合** | 核心用 `proxybroker` + `aiohttp`，备用第三方 API（如亮数据） |
+**我的见解**：感谢允灿、少平和美娜的详尽方案！作为 QA，我回应大家的问题并补充测试策略和质量保障方案：
 
 ---
 
-## 🐍 后端技术细节补充
+## ✅ 回应大家的问题
 
-### Python 3.11 特性利用
+### 回应允灿的问题
 
-**优势**：
-- **更快的执行速度**：CPython 3.11 平均提速 25%，对爬虫密集型任务友好
-- **更好的类型错误信息**：开发调试效率提升
-- **`asyncio` 性能优化**：并发爬虫性能更好
+| 你的问题 | 我的建议 | 说明 |
+|----------|----------|------|
+| **QA 测试数据场景** | **需要，我来准备** | 我会准备 5 类测试数据：1) 正常数据 2) 边界值（粉丝数 0/999999）3) 异常数据（空字段/特殊字符）4) 大数据量（10 万 + 笔记）5) 脏数据（格式错误）。3/26 前提供 |
+| **后端安全扫描工具** | **Bandit + Safety + Trivy** | Bandit 扫代码漏洞，Safety 扫依赖漏洞，Trivy 扫 Docker 镜像漏洞。我会集成到 CI/CD 流程中 |
 
-**Dockerfile 示例**：
-```dockerfile
-# backend/Dockerfile
-FROM python:3.11-slim
+### 回应少平的问题
 
-WORKDIR /app
+| 你的问题 | 我的建议 | 说明 |
+|----------|----------|------|
+| **前端 E2E 测试进 CI/CD** | **需要，但分阶段** | 第一阶段（3/30 前）：核心流程 E2E 测试进 CI（登录/添加账号/查看数据）。第二阶段（4/02 后）：全量 E2E 测试。Playwright 测试跑在 GitHub Actions 上 |
+| **前端性能优化验收标准** | **需要，纳入验收** | Lighthouse 评分标准：Performance 85+、Accessibility 90+、Best Practices 90+。我会用 Lighthouse CI 自动化检测 |
 
-# 安装系统依赖
-RUN apt-get update && apt-get install -y \
-    gcc \
-    postgresql-client \
-    && rm -rf /var/lib/apt/lists/*
+### 回应美娜的问题
 
-# 安装 Python 依赖
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# 复制代码
-COPY . .
-
-# 启动命令
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
+| 你的问题 | 我的计划 | 说明 |
+|----------|----------|------|
+| **测试用例评审会时间** | **3/26 20:00** | 我会在 3/26 18:00 前发出测试用例文档，20:00 开会评审（腾讯会议，我拉会） |
+| **独立测试环境** | **需要，感谢协调** | 测试环境需独立于开发环境，建议配置：1) 独立 PostgreSQL 实例 2) 独立 Redis 3) Mock 小红书 API。服务器资源我来评估后发你 |
 
 ---
 
-### 数据库迁移方案（Alembic）
+## 🧪 QA 测试策略
 
-**目录结构**：
+### 测试分层设计
+
 ```
-backend/
-├── alembic/
-│   ├── versions/          # 迁移脚本
-│   │   ├── 001_initial_schema.py
-│   │   ├── 002_add_alert_rules.py
-│   │   └── ...
-│   ├── env.py
-│   └── script.py.mako
-├── alembic.ini
-└── src/
-    └── models/            # SQLAlchemy 模型
+┌─────────────────────────────────────┐
+│         E2E 测试 (Playwright)        │  覆盖率 20%  (核心流程)
+├─────────────────────────────────────┤
+│         集成测试 (Pytest + HTTPX)    │  覆盖率 50%  (API 层)
+├─────────────────────────────────────┤
+│         单元测试 (Pytest + Vitest)   │  覆盖率 80%  (单元层)
+└─────────────────────────────────────┘
 ```
 
-**常用命令**：
-```bash
-# 初始化（仅首次）
-alembic init alembic
-
-# 创建新迁移
-alembic revision --autogenerate -m "add alert rules table"
-
-# 应用迁移
-alembic upgrade head
-
-# 回滚
-alembic downgrade -1
-```
-
-**@少锋**：迁移脚本会纳入 Git 版本控制，测试环境每次重建时自动执行 `alembic upgrade head` 初始化数据库结构。
+**测试金字塔原则**：
+- **单元测试**：最多，快速，隔离（Mock 外部依赖）
+- **集成测试**：适中，验证模块间协作
+- **E2E 测试**：最少，慢，验证完整用户流程
 
 ---
 
-### 爬虫反反爬策略
+### 后端测试方案（Pytest）
 
-**多层防护设计**：
+**测试目录结构**：
+```
+backend/tests/
+├── unit/                    # 单元测试
+│   ├── test_models.py      # 模型测试
+│   ├── test_services.py    # 服务层测试
+│   └── test_utils.py       # 工具函数测试
+├── integration/             # 集成测试
+│   ├── test_accounts_api.py # 账号 API 测试
+│   ├── test_notes_api.py   # 笔记 API 测试
+│   ├── test_alerts_api.py  # 告警 API 测试
+│   └── test_crawler.py     # 爬虫测试
+├── e2e/                     # E2E 测试
+│   └── test_full_flow.py   # 完整流程测试
+├── conftest.py             # Pytest 配置 + Fixture
+└── pytest.ini              # Pytest 配置
+```
 
-| 策略 | 实现方案 | 优先级 |
-|------|----------|--------|
-| **请求频率限制** | 令牌桶算法，单账号请求间隔 2-5 秒随机 | P0 |
-| **User-Agent 轮换** | 维护 50+ 真实浏览器 UA 池，每次请求随机选择 | P0 |
-| **IP 代理池** | 自建代理池（proxybroker）+ 第三方 API 备用 | P0 |
-| **Cookie 管理** | 多账号 Cookie 轮换，定期刷新 | P1 |
-| **请求指纹混淆** | 随机化 TLS 指纹（使用 `tls_client` 库） | P1 |
-| **行为模拟** | 随机滚动、随机停留时间（Playwright 备用方案） | P2 |
+**测试覆盖率要求**：
+| 模块 | 语句覆盖率 | 分支覆盖率 | 优先级 |
+|------|-----------|-----------|--------|
+| **爬虫核心** | 90%+ | 85%+ | P0 |
+| **API 接口** | 85%+ | 80%+ | P0 |
+| **告警引擎** | 85%+ | 80%+ | P0 |
+| **数据模型** | 80%+ | 75%+ | P1 |
+| **工具函数** | 75%+ | 70%+ | P2 |
 
-**代理池实现方案**：
+**关键测试场景**：
 ```python
-# src/crawler/proxy_manager.py
-import aiohttp
-import random
-from typing import Optional, List
-
-class ProxyManager:
-    def __init__(self):
-        self.proxy_pool: List[str] = []
-        self.failed_proxies: set = set()
-        
-    async def fetch_proxies(self):
-        """从多个源获取代理"""
-        # 自建代理池（proxybroker）
-        # 第三方 API（亮数据、Smartproxy 等）
-        pass
-    
-    async def get_proxy(self) -> Optional[str]:
-        """获取可用代理"""
-        available = [p for p in self.proxy_pool if p not in self.failed_proxies]
-        if not available:
-            await self.fetch_proxies()  # 代理池耗尽，重新获取
-            available = self.proxy_pool
-        return random.choice(available) if available else None
-    
-    async def mark_failed(self, proxy: str):
-        """标记失败代理"""
-        self.failed_proxies.add(proxy)
-        if len(self.failed_proxies) > len(self.proxy_pool) * 0.5:
-            await self.fetch_proxies()  # 失败率过高，刷新代理池
-```
-
-**@少锋**：代理池部分我会编写单元测试，模拟代理失效场景，验证自动切换逻辑。
-
----
-
-## 📡 Swagger Schema 交付计划
-
-### API 设计进度
-
-**预计完成时间**：**3/25 20:00 前**
-
-**API 分类**：
-
-| 模块 | 接口数量 | 优先级 | 预计完成时间 |
-|------|----------|--------|--------------|
-| **账号管理** | 5 个（列表/详情/添加/删除/刷新） | P0 | 3/25 12:00 |
-| **笔记数据** | 6 个（列表/详情/筛选/导出/删除/批量操作） | P0 | 3/25 14:00 |
-| **数据分析** | 4 个（趋势/对比/统计/报表） | P1 | 3/25 16:00 |
-| **告警系统** | 5 个（列表/详情/确认/配置/WebSocket） | P0 | 3/25 18:00 |
-| **系统管理** | 3 个（健康检查/配置/日志） | P2 | 3/25 20:00 |
-
-**交付形式**：
-1. **Swagger UI**：`http://localhost:8000/docs`（FastAPI 自动生成）
-2. **OpenAPI JSON**：`http://localhost:8000/openapi.json`（少平可用此 URL 生成客户端）
-3. **Mock API**：用 `pytest-mock` + `responses` 提供 Mock 数据，少平可独立开发
-
-**@少平**：3/25 中午前我会先提供账号管理模块的 API Schema，你可以提前开始生成客户端代码。全部接口 3/25 晚上完成。
-
----
-
-## 🗄️ 数据库设计补充
-
-### 核心表结构（简化版）
-
-```sql
--- 账号表
-CREATE TABLE accounts (
-    id SERIAL PRIMARY KEY,
-    account_id VARCHAR(64) UNIQUE NOT NULL,  -- 小红书账号 ID
-    nickname VARCHAR(128),
-    avatar_url TEXT,
-    follower_count INTEGER DEFAULT 0,
-    following_count INTEGER DEFAULT 0,
-    note_count INTEGER DEFAULT 0,
-    last_crawled_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-
--- 笔记表
-CREATE TABLE notes (
-    id SERIAL PRIMARY KEY,
-    note_id VARCHAR(64) UNIQUE NOT NULL,
-    account_id INTEGER REFERENCES accounts(id),
-    title VARCHAR(512),
-    content TEXT,
-    cover_url TEXT,
-    like_count INTEGER DEFAULT 0,
-    collect_count INTEGER DEFAULT 0,
-    comment_count INTEGER DEFAULT 0,
-    publish_time TIMESTAMP,
-    crawled_at TIMESTAMP DEFAULT NOW()
-);
-
--- 告警规则表
-CREATE TABLE alert_rules (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(128) NOT NULL,
-    metric VARCHAR(64) NOT NULL,  -- follower_count, like_count 等
-    operator VARCHAR(8) NOT NULL,  -- gt, lt, eq, change_percent
-    threshold DECIMAL(10,2) NOT NULL,
-    level VARCHAR(16) NOT NULL,  -- INFO, WARN, CRITICAL
-    enabled BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- 告警记录表
-CREATE TABLE alerts (
-    id SERIAL PRIMARY KEY,
-    rule_id INTEGER REFERENCES alert_rules(id),
-    account_id INTEGER REFERENCES accounts(id),
-    note_id INTEGER REFERENCES notes(id),
-    trigger_value DECIMAL(10,2),
-    threshold_value DECIMAL(10,2),
-    level VARCHAR(16) NOT NULL,
-    title VARCHAR(256),
-    message TEXT,
-    is_confirmed BOOLEAN DEFAULT FALSE,
-    confirmed_at TIMESTAMP,
-    confirmed_by INTEGER,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-```
-
-**@少锋**：数据库设计会写成 Alembic 迁移脚本，测试环境自动初始化。我会准备测试数据 Fixture，方便你验证查询逻辑。
-
----
-
-## 🚀 后端开发计划
-
-### 详细排期
-
-| 时间 | 任务 | 交付物 |
-|------|------|--------|
-| **3/24** | 项目初始化（FastAPI + SQLAlchemy + PostgreSQL） | 可运行的空项目 |
-| **3/25** | API 设计 + Swagger Schema + Mock API | OpenAPI JSON + Mock 数据 |
-| **3/26** | 账号管理模块（CRUD + 爬虫集成） | 功能完成 + 单元测试 |
-| **3/27** | 笔记数据模块（CRUD + 爬虫集成） | 功能完成 + 单元测试 |
-| **3/28** | 告警系统（规则管理 + WebSocket 推送） | 功能完成 + 单元测试 |
-| **3/29** | 数据分析模块 + 前后端联调 | 联调报告 |
-| **3/30** | 爬虫优化（反反爬 + 性能调优） | 性能测试报告 |
-| **3/31** | Docker 容器化 + CI/CD 集成 | Docker Compose + GitHub Actions |
-
----
-
-## 🧪 后端测试方案
-
-### 单元测试（Pytest）
-
-**测试范围**：
-- API 接口测试（用 `httpx` 模拟请求）
-- 数据库操作测试（用 `pytest-postgresql` 提供测试数据库）
-- 爬虫逻辑测试（用 `responses` Mock HTTP 请求）
-- 告警规则引擎测试
-
-**测试覆盖率目标**：
-- 语句覆盖率：80%+
-- 分支覆盖率：75%+
-- 函数覆盖率：85%+
-
-**示例**：
-```python
-# tests/test_accounts_api.py
-import pytest
-from httpx import AsyncClient
+# tests/integration/test_accounts_api.py
 
 @pytest.mark.asyncio
-async def test_add_account(client: AsyncClient, mock_xiaohongshu_api):
-    """测试添加账号接口"""
+async def test_add_account_duplicate(client, sample_account):
+    """测试添加重复账号（应返回 409 Conflict）"""
     response = await client.post("/api/accounts", json={
-        "account_id": "64f8a9b2c3d4e5f6"
+        "account_id": sample_account.account_id
     })
-    assert response.status_code == 201
-    data = response.json()
-    assert data["account_id"] == "64f8a9b2c3d4e5f6"
-    assert data["nickname"] is not None  # 从 Mock API 获取
+    assert response.status_code == 409
+    assert "已存在" in response.json()["detail"]
 
 @pytest.mark.asyncio
-async def test_refresh_account(client: AsyncClient, sample_account):
-    """测试刷新账号数据"""
+async def test_refresh_account_rate_limit(client, sample_account):
+    """测试刷新频率限制（1 分钟内只能刷新 1 次）"""
+    # 第一次刷新
+    response1 = await client.post(f"/api/accounts/{sample_account.id}/refresh")
+    assert response1.status_code == 200
+    
+    # 立即第二次刷新（应被限流）
+    response2 = await client.post(f"/api/accounts/{sample_account.id}/refresh")
+    assert response2.status_code == 429
+    assert "请求过于频繁" in response2.json()["detail"]
+
+@pytest.mark.asyncio
+async def test_crawler_proxy_failover(client, mock_proxy_pool):
+    """测试代理失败自动切换"""
+    # Mock 第一个代理失败
+    mock_proxy_pool.get_proxy.return_value = "proxy1:8080"
+    mock_proxy_pool.mark_failed.side_effect = lambda p: None
+    
     response = await client.post(f"/api/accounts/{sample_account.id}/refresh")
     assert response.status_code == 200
-    # 验证数据已更新
+    # 验证代理被标记为失败并切换
+    mock_proxy_pool.mark_failed.assert_called_with("proxy1:8080")
 ```
 
-**@少锋**：后端测试用 `pytest` + `pytest-asyncio` + `pytest-cov`，测试脚本放在 `tests/` 目录。3/26 开始编写，3/28 完成全部单元测试。
+**@允灿**：后端测试 Fixture 我来配合你编写，特别是 Mock 小红书 API 和代理池部分。3/26 开始编写测试用例。
 
 ---
 
-## ❓ 我的疑问
+### 前端测试方案（Vitest + Playwright）
 
-**@少平**：
-1. 前端计划用哪个 HTTP 客户端库？（Axios / Fetch / React Query？）我需要确保 CORS 配置兼容
-2. 前端开发环境端口计划用 3000 还是其他？（避免与后端 8000 冲突）
-3. OpenAPI Generator 生成客户端时，需要我提供额外的类型定义吗？
-
-**@少锋**：
-1. QA 测试时，需要我准备特定的测试数据场景吗？（如：大数据量/边界值/异常数据）
-2. CI/CD 流程中，后端安全扫描除了 Bandit，还需要集成其他工具吗？（如：safety 检查依赖漏洞）
-
-**@美娜**：
-1. 项目预算中，代理池服务（如亮数据）的采购预算是多少？（影响反爬策略实现）
-2. 4/02 验收演示时，需要准备真实小红书账号数据演示吗？还是用 Mock 数据即可？
-
----
-
-## 🎖️ 积分自评
-
-**本轮发言自评**：+5 分
-- 理由：完整回应少锋问题、后端技术细节补充、Swagger Schema 交付计划、数据库设计、测试方案、开发排期
-
----
-
-## 📅 下一步行动
-
-**今日工作计划（3/24）**：
-1. **上午**：后端项目初始化（FastAPI + SQLAlchemy + PostgreSQL + Redis）
-2. **下午**：设计 API Schema（账号管理模块优先）
-3. **晚上**：提供 Mock API 给少平，开始编写爬虫基础框架
-
-**本周里程碑**：
-- **3/25**：完成全部 API Schema + Swagger 文档
-- **3/26**：账号管理模块开发完成
-- **3/27**：笔记数据模块开发完成
-- **3/28**：告警系统 + 爬虫 MVP 完成
-
-**依赖项**：
-- 等待美娜确认代理池预算
-- 等待少平提供前端 Dockerfile（用于 Docker Compose 集成）
-
----
-
-**总结**：后端技术方案已明确，Python 3.11 + FastAPI + Alembic + 多层反爬策略。3/25 提供 Swagger Schema 给少平生成前端客户端，3/28 完成爬虫 MVP 和告警系统。测试和 CI/CD 与少锋协作完成！🐍✅
-
----
-
-### 24. 少平（交互设计师 + 前端开发）2026-03-24 05:56
-
-**我的见解**：感谢允灿详尽的后端技术方案！作为前端开发，我回应你的问题并补充前端技术选型和开发计划：
-
----
-
-## ✅ 回应允灿的问题
-
-### 前端技术栈确认
-
-| 你的问题 | 我的决策 | 说明 |
-|----------|----------|------|
-| **HTTP 客户端库** | **React Query (TanStack Query) + Axios** | React Query 负责缓存/重试/轮询，Axios 负责底层请求 |
-| **前端开发端口** | **3000** | 与后端 8000 不冲突，Docker Compose 中会配置端口映射 |
-| **OpenAPI Generator** | **不需要额外类型定义** | 直接用你的 OpenAPI JSON 生成 TypeScript 类型和 API 客户端 |
-
----
-
-## 🎨 前端技术方案
-
-### 技术栈选型
-
-**核心框架**：
-- **React 18** + **TypeScript** + **Vite**
-- **UI 组件库**：Ant Design 5.x（企业级组件丰富，适合数据后台）
-- **状态管理**：Zustand（轻量级，比 Redux 简单）
-- **数据请求**：React Query + Axios
-- **图表库**：ECharts（数据可视化强大，支持丰富图表类型）
-- **代码生成**：openapi-typescript-codegen（生成 TypeScript 客户端）
-
-**目录结构**：
-```
-frontend/
-├── src/
-│   ├── api/                    # OpenAPI 生成的客户端代码
-│   │   ├── core/              # 核心请求逻辑
-│   │   ├── services/          # 按模块分类的 API 服务
-│   │   └── types/             # TypeScript 类型定义
-│   ├── components/            # 公共组件
-│   │   ├── AccountCard/       # 账号卡片
-│   │   ├── NoteTable/         # 笔记表格
-│   │   ├── AlertList/         # 告警列表
-│   │   └── Chart/             # 图表组件
-│   ├── pages/                 # 页面
-│   │   ├── Dashboard/         # 数据概览
-│   │   ├── AccountManage/     # 账号管理
-│   │   ├── NoteAnalysis/      # 笔记分析
-│   │   ├── AlertConfig/       # 告警配置
-│   │   └── System/            # 系统设置
-│   ├── stores/                # Zustand 状态管理
-│   ├── hooks/                 # 自定义 Hooks
-│   ├── utils/                 # 工具函数
-│   ├── App.tsx
-│   └── main.tsx
-├── public/
-├── openapi.json               # 从后端同步的 OpenAPI Schema
-├── package.json
-└── vite.config.ts
-```
-
----
-
-### OpenAPI 代码生成方案
-
-**生成脚本**：
-```bash
-# frontend/scripts/generate-api.sh
-#!/bin/bash
-
-# 从后端获取 OpenAPI JSON
-curl http://localhost:8000/openapi.json -o ./openapi.json
-
-# 生成 TypeScript 客户端
-npx openapi-typescript-codegen \
-  --input ./openapi.json \
-  --output ./src/api \
-  --client axios \
-  --useOptions \
-  --useUnionTypes
-
-echo "✅ API 客户端代码生成完成"
-```
-
-**package.json 配置**：
-```json
-{
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "generate:api": "bash scripts/generate-api.sh"
-  }
-}
-```
-
-**使用示例**：
+**单元测试（Vitest）**：
 ```typescript
-// 前端调用后端 API
-import { AccountsService, NotesService } from '@/api';
+// tests/components/AccountCard.test.tsx
 
-// 获取账号列表
-const accounts = await AccountsService.listAccounts();
-
-// 添加账号
-const newAccount = await AccountsService.addAccount({
-  account_id: '64f8a9b2c3d4e5f6'
-});
-
-// 刷新账号数据
-await AccountsService.refreshAccount(accountId);
-```
-
-**@允灿**：你 3/25 提供 OpenAPI JSON 后，我运行 `npm run generate:api` 即可生成完整的 TypeScript 客户端，包含类型定义和 API 方法。不需要额外工作！
-
----
-
-### 前端核心功能模块
-
-#### 1. 数据概览页（Dashboard）
-
-**功能**：
-- 监控账号总数、笔记总数、今日新增
-- 粉丝数趋势图（近 7 天/30 天）
-- 互动数据概览（点赞/收藏/评论）
-- 待处理告警列表
-
-**技术实现**：
-- ECharts 折线图展示趋势
-- React Query 轮询（每 5 分钟刷新）
-- 告警 WebSocket 实时推送
-
-#### 2. 账号管理页
-
-**功能**：
-- 账号列表（表格展示，支持搜索/筛选）
-- 添加账号（输入小红书账号 ID）
-- 账号详情（粉丝数、笔记数、历史趋势）
-- 手动刷新账号数据
-
-**技术实现**：
-- Ant Design Table + Pagination
-- 批量操作（批量刷新、批量删除）
-- 刷新状态实时反馈
-
-#### 3. 笔记分析页
-
-**功能**：
-- 笔记列表（封面图、标题、互动数据）
-- 笔记详情（完整内容、评论数据）
-- 数据对比（多篇笔记数据对比）
-- 导出功能（CSV/Excel）
-
-**技术实现**：
-- 虚拟滚动优化大数据量
-- ECharts 对比柱状图
-- 文件下载 API 集成
-
-#### 4. 告警配置页
-
-**功能**：
-- 告警规则列表
-- 添加/编辑告警规则
-- 告警历史记录
-- WebSocket 实时告警推送
-
-**技术实现**：
-- WebSocket 连接管理（自动重连）
-- 告警通知（浏览器 Notification API）
-- 规则表单验证
-
----
-
-## 🐳 Docker Compose 集成
-
-**前端 Dockerfile**：
-```dockerfile
-# frontend/Dockerfile
-FROM node:20-alpine AS builder
-
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
-
-FROM nginx:alpine
-COPY --from=builder /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
-```
-
-**Docker Compose 配置**：
-```yaml
-# docker-compose.yml
-version: '3.8'
-
-services:
-  frontend:
-    build: ./frontend
-    ports:
-      - "3000:80"  # 映射到宿主机 3000 端口
-    depends_on:
-      - backend
-    environment:
-      - VITE_API_BASE_URL=http://backend:8000
-
-  backend:
-    build: ./backend
-    ports:
-      - "8000:8000"
-    depends_on:
-      - db
-      - redis
-    environment:
-      - DATABASE_URL=postgresql://user:pass@db:5432/xiaohongshu
-      - REDIS_URL=redis://redis:6379
-
-  db:
-    image: postgres:15-alpine
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=pass
-      - POSTGRES_DB=xiaohongshu
-
-  redis:
-    image: redis:7-alpine
-    volumes:
-      - redis_data:/data
-
-volumes:
-  postgres_data:
-  redis_data:
-```
-
-**@允灿**：前端 Dockerfile 和 Docker Compose 配置我来编写，3/28 前完成，与你后端集成。
-
----
-
-## 📐 前端开发计划
-
-### 详细排期
-
-| 时间 | 任务 | 交付物 |
-|------|------|--------|
-| **3/24** | 前端项目初始化（Vite + React + TS + Ant Design） | 可运行的空项目 |
-| **3/25** | 等待允灿 OpenAPI Schema，生成 API 客户端 | src/api/ 目录 |
-| **3/26** | 账号管理页开发（列表/详情/添加/刷新） | 功能完成 |
-| **3/27** | 笔记分析页开发（列表/详情/对比/导出） | 功能完成 |
-| **3/28** | 数据概览页 + 告警配置页 + WebSocket 集成 | 功能完成 |
-| **3/29** | 前后端联调 + Bug 修复 | 联调报告 |
-| **3/30** | UI 优化 + 响应式适配 + 性能优化 | 性能测试报告 |
-| **3/31** | Docker 集成 + 部署文档 | Docker Compose + README |
-
----
-
-## 🧪 前端测试方案
-
-### 测试工具链
-
-- **单元测试**：Vitest + React Testing Library
-- **E2E 测试**：Playwright
-- **覆盖率**：Vitest 内置覆盖率报告
-
-**测试覆盖率目标**：
-- 语句覆盖率：75%+
-- 分支覆盖率：70%+
-- 组件覆盖率：80%+
-
-**示例**：
-```typescript
-// tests/AccountCard.test.tsx
 import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AccountCard from '@/components/AccountCard';
+import { AccountsService } from '@/api';
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: { retry: false }
+// Mock API 调用
+vi.mock('@/api', () => ({
+  AccountsService: {
+    getAccount: vi.fn()
   }
-});
+}));
 
-test('显示账号信息', async () => {
+test('账号卡片显示正确数据', async () => {
+  // Mock API 返回数据
+  vi.mocked(AccountsService.getAccount).mockResolvedValue({
+    id: 1,
+    account_id: '64f8a9b2c3d4e5f6',
+    nickname: '测试账号',
+    follower_count: 10000,
+    following_count: 500,
+    note_count: 120
+  });
+
+  const queryClient = new QueryClient();
+  
   render(
     <QueryClientProvider client={queryClient}>
-      <AccountCard accountId="64f8a9b2c3d4e5f6" />
+      <AccountCard accountId="1" />
     </QueryClientProvider>
   );
-  
+
   await waitFor(() => {
     expect(screen.getByText('测试账号')).toBeInTheDocument();
     expect(screen.getByText('粉丝：10000')).toBeInTheDocument();
   });
 });
+
+test('加载状态显示骨架屏', () => {
+  // API 请求中，应显示骨架屏
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <AccountCard accountId="1" />
+    </QueryClientProvider>
+  );
+  
+  expect(screen.getByTestId('skeleton')).toBeInTheDocument();
+});
 ```
 
-**@少锋**：前端测试用 Vitest（与 Vite 无缝集成），测试脚本放在 `tests/` 目录。3/26 开始编写，3/30 完成全部测试。
+**E2E 测试（Playwright）**：
+```typescript
+// tests/e2e/account_management.spec.ts
+
+import { test, expect } from '@playwright/test';
+
+test.describe('账号管理模块', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('http://localhost:3000');
+    // 登录（如有）
+  });
+
+  test('添加新账号', async ({ page }) => {
+    await page.click('text=添加账号');
+    await page.fill('input[placeholder="小红书账号 ID"]', '64f8a9b2c3d4e5f6');
+    await page.click('button:has-text("确认")');
+    
+    // 验证添加成功
+    await expect(page.locator('.ant-message-success')).toBeVisible();
+    await expect(page.locator('text=测试账号')).toBeVisible();
+  });
+
+  test('刷新账号数据', async ({ page }) => {
+    await page.click('text=刷新');
+    await expect(page.locator('.ant-spin')).toBeVisible(); // 加载状态
+    await expect(page.locator('text=刷新成功')).toBeVisible();
+  });
+
+  test('批量操作', async ({ page }) => {
+    // 选择多个账号
+    await page.check('input[type="checkbox"].row-1');
+    await page.check('input[type="checkbox"].row-2');
+    
+    // 批量刷新
+    await page.click('text=批量刷新');
+    await expect(page.locator('text=批量刷新成功')).toBeVisible();
+  });
+});
+```
+
+**@少平**：前端测试我来帮你 Review 测试用例，特别是边界场景和异常流程。Playwright 测试配置我帮你集成到 CI/CD。
+
+---
+
+## 🚀 CI/CD 流程设计
+
+### GitHub Actions 工作流
+
+**文件**：`.github/workflows/ci.yml`
+
+```yaml
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # 后端测试
+  backend-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: xiaohongshu_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: [6379:6379]
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov
+      
+      - name: Run security scan (Bandit)
+        run: |
+          cd backend
+          bandit -r src/ -f json -o bandit-report.json
+      
+      - name: Run dependency scan (Safety)
+        run: |
+          cd backend
+          safety check --json > safety-report.json
+      
+      - name: Run unit tests
+        run: |
+          cd backend
+          pytest tests/unit/ --cov=src/ --cov-report=xml
+      
+      - name: Run integration tests
+        run: |
+          cd backend
+          pytest tests/integration/ --cov=src/ --cov-report=xml --cov-append
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./backend/coverage.xml
+          flags: backend
+
+  # 前端测试
+  frontend-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+      
+      - name: Run lint
+        run: |
+          cd frontend
+          npm run lint
+      
+      - name: Run unit tests
+        run: |
+          cd frontend
+          npm run test:coverage
+      
+      - name: Run E2E tests
+        run: |
+          cd frontend
+          npx playwright install --with-deps
+          npm run test:e2e
+      
+      - name: Run Lighthouse
+        uses: treosh/lighthouse-ci-action@v10
+        with:
+          urls: |
+            http://localhost:3000/
+          uploadArtifacts: true
+          budgetPath: ./frontend/lighthouse-budget.json
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./frontend/coverage.xml
+          flags: frontend
+
+  # Docker 镜像扫描
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-test]
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Build Docker images
+        run: |
+          docker-compose build
+      
+      - name: Run Trivy scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'xiaohongshu-backend:latest'
+          format: 'sarif'
+          output: 'trivy-backend.sarif'
+      
+      - name: Run Trivy scan (frontend)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'xiaohongshu-frontend:latest'
+          format: 'sarif'
+          output: 'trivy-frontend.sarif'
+      
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-backend.sarif'
+
+  # 部署到测试环境
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-test, security-scan]
+    if: github.ref == 'refs/heads/develop'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Deploy to staging
+        run: |
+          # 部署到测试环境（具体脚本根据实际服务器配置）
+          echo "Deploying to staging environment..."
+```
+
+**@允灿 @少平**：CI/CD 流程我会在 3/27 前搭建完成，集成：
+- ✅ 后端单元测试 + 集成测试
+- ✅ 前端单元测试 + E2E 测试
+- ✅ 安全扫描（Bandit + Safety + Trivy）
+- ✅ 覆盖率报告（Codecov）
+- ✅ Lighthouse 性能检测
+- ✅ 自动部署到测试环境
+
+---
+
+## 📋 测试数据准备计划
+
+### 测试数据集（3/26 前提供）
+
+| 数据集 | 用途 | 数据量 | 说明 |
+|--------|------|--------|------|
+| **正常数据** | 功能测试 | 10 账号 + 100 笔记 | 标准格式数据 |
+| **边界值数据** | 边界测试 | 5 账号 + 20 笔记 | 粉丝数 0/999999/空值 |
+| **异常数据** | 异常测试 | 5 账号 + 20 笔记 | 特殊字符/格式错误/超长字段 |
+| **大数据集** | 性能测试 | 100 账号 + 10 万笔记 | 分页/查询性能测试 |
+| **脏数据** | 容错测试 | 5 账号 + 10 笔记 | JSON 格式错误/必填字段缺失 |
+
+**数据生成脚本**：
+```python
+# tests/fixtures/generate_test_data.py
+import random
+from datetime import datetime, timedelta
+
+def generate_normal_accounts(count=10):
+    """生成正常账号数据"""
+    accounts = []
+    for i in range(count):
+        accounts.append({
+            "account_id": f"64f8a9b2c3d4e5f{i:02d}",
+            "nickname": f"测试账号{i}",
+            "follower_count": random.randint(1000, 100000),
+            "following_count": random.randint(100, 1000),
+            "note_count": random.randint(10, 500)
+        })
+    return accounts
+
+def generate_boundary_accounts():
+    """生成边界值账号数据"""
+    return [
+        {"account_id": "001", "nickname": "零粉丝", "follower_count": 0},
+        {"account_id": "002", "nickname": "超大粉丝", "follower_count": 999999},
+        {"account_id": "003", "nickname": "空昵称", "nickname": ""},
+        # ...
+    ]
+
+# 生成测试数据 Fixture
+if __name__ == "__main__":
+    import json
+    data = {
+        "normal": generate_normal_accounts(),
+        "boundary": generate_boundary_accounts(),
+        # ...
+    }
+    with open("test_data.json", "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+```
+
+**@允灿**：测试数据我会用 Python 脚本生成，3/26 前放到 `tests/fixtures/` 目录，你开发时可以直接用。
+
+---
+
+## 📅 QA 工作计划
+
+### 详细排期
+
+| 时间 | 任务 | 交付物 | 优先级 |
+|------|------|--------|--------|
+| **3/24** | 测试计划大纲 | 测试策略文档 | P0 |
+| **3/25** | 测试用例编写（后端 API） | 测试用例文档 v1 | P0 |
+| **3/26** | 测试用例编写（前端 + E2E）+ 测试数据准备 | 测试用例文档 v2 + 测试数据 | P0 |
+| **3/26 20:00** | 测试用例评审会 | 评审会议纪要 | P0 |
+| **3/27** | CI/CD 流程搭建 | GitHub Actions 工作流 | P0 |
+| **3/28** | 配合后端开发编写单元测试 | 后端测试代码 | P1 |
+| **3/29** | 执行后端集成测试 | 集成测试报告 | P0 |
+| **3/30** | 执行前端测试 + E2E 测试 + 性能测试 | 完整测试报告 | P0 |
+| **3/31** | Bug 回归测试 + 验收准备 | 验收测试报告 | P0 |
+| **4/01** | 预演验收演示 | 验收演示脚本 | P1 |
+| **4/02** | 正式验收 | 验收通过 | P0 |
 
 ---
 
 ## ❓ 我的疑问
 
 **@允灿**：
-1. WebSocket 告警推送的协议格式是什么？（JSON Schema 有定义吗？）
-2. 文件导出接口是直接返回文件流还是需要前端轮询任务状态？
-3. 后端 CORS 配置会允许前端 3000 端口跨域吗？
+1. 爬虫模块的 Mock 方案是什么？（我需要 Mock 数据来测试，不需要真实爬取）
+2. WebSocket 告警推送有测试计划吗？（这部分测试比较特殊，需要模拟实时推送）
+3. 数据库迁移（Alembic）有回滚测试吗？（验证迁移失败时能否安全回滚）
 
-**@少锋**：
-1. 前端 E2E 测试用 Playwright，需要配置到 CI/CD 流程中吗？
-2. 前端性能优化（如 Lighthouse 评分）需要纳入验收标准吗？
+**@少平**：
+1. 前端组件有 Storybook 吗？（方便我独立测试组件，不需要启动整个应用）
+2. 前端错误边界（Error Boundary）有实现吗？（我需要测试异常场景下的 UI 容错）
 
 **@美娜**：
-1. 前端 UI 设计稿需要我先出原型图确认吗？还是直接用 Ant Design 默认风格？
-2. 4/02 验收演示时，需要部署到云服务器演示还是本地演示即可？
+1. 测试环境服务器资源（PostgreSQL + Redis + 应用服务器）预算是多少？
+2. 验收测试时，需要我准备正式的验收测试报告文档吗？（Word/PDF 格式）
 
 ---
 
 ## 🎖️ 积分自评
 
 **本轮发言自评**：+5 分
-- 理由：完整回应允灿问题、前端技术栈选型、OpenAPI 集成方案、Docker Compose 配置、开发排期、测试方案
+- 理由：完整回应团队成员问题、QA 测试策略设计、CI/CD 流程方案、测试数据准备计划、详细排期
 
 ---
 
 ## 📅 下一步行动
 
 **今日工作计划（3/24）**：
-1. **上午**：前端项目初始化（Vite + React 18 + TypeScript + Ant Design）
-2. **下午**：搭建项目目录结构 + 配置 ESLint/Prettier
-3. **晚上**：编写基础组件（AccountCard、NoteTable）
+1. **上午**：编写测试计划大纲（测试策略文档）
+2. **下午**：开始编写后端 API 测试用例
+3. **晚上**：设计测试数据生成脚本
 
 **本周里程碑**：
-- **3/25**：等待允灿 OpenAPI Schema，生成 API 客户端
-- **3/26**：账号管理页开发完成
-- **3/27**：笔记分析页开发完成
-- **3/28**：全部页面开发完成 + WebSocket 集成
+- **3/25**：完成测试用例文档 v1（后端 API 部分）
+- **3/26**：完成测试用例文档 v2 + 测试数据准备 + 组织评审会
+- **3/27**：CI/CD 流程搭建完成
+- **3/30**：完成全部测试并输出测试报告
 
 **依赖项**：
-- 等待允灿提供 OpenAPI JSON（3/25）
-- 等待美娜确认 UI 设计风格
+- 等待允灿提供 API Schema（3/25）→ 我开始编写集成测试用例
+- 等待少平提供前端组件（3/26）→ 我开始编写 E2E 测试用例
+- 等待美娜确认测试环境资源
 
 ---
 
-**总结**：前端技术方案已明确，React 18 + TypeScript + Ant Design + OpenAPI 自动生成客户端。3/25 生成 API 代码，3/28 完成全部页面开发，3/31 完成 Docker 集成和部署！🎨✅
+**总结**：QA 测试策略已明确，测试分层设计（单元 80% + 集成 50% + E2E 20%），CI/CD 流程集成安全扫描和性能检测，测试数据 3/26 前准备完成。3/26 晚上 8 点组织测试用例评审会，请大家准时参加！🧪✅
 
 ---
