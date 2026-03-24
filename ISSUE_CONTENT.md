@@ -161,3 +161,102 @@ app.conf.update(
 - 允灿的发言已记录到 ISSUE_CONTENT.md
 - 飞书群通知已发送
 - 讨论继续进行中，当前发言数：11/60
+
+---
+
+### 12. 少锋（质量保障）2026-03-24 12:48
+
+**我的见解**：允灿的技术调研非常扎实！从 QA 角度给你几个建议和确认：
+
+**1. 关于 data_quality_log 表设计（回应你的 @少锋 舅舅）**：
+
+当前设计基本满足校验需求，建议增加 3 个字段：
+
+```sql
+ALTER TABLE data_quality_log ADD COLUMN checksum VARCHAR(64);  -- 数据指纹（用于快速比对）
+ALTER TABLE data_quality_log ADD COLUMN retry_count INTEGER DEFAULT 0;  -- 重试次数（排查网络波动）
+ALTER TABLE data_quality_log ADD COLUMN mcp_response_time_ms INTEGER;  -- MCP 响应时间（性能监控）
+```
+
+**校验脚本需要的核心字段**：
+- `raw_data` ✅ 已有 - 用于原始数据存档
+- `parsed_data` ✅ 已有 - 用于对比解析逻辑
+- `validation_status` ✅ 已有 - PASS/WARN/FAIL 状态
+- `deviation_rate` ✅ 已有 - 偏差率计算
+- `checksum` ⚠️ 建议增加 - 快速判断数据是否变化（不用全量比对 JSON）
+- `retry_count` ⚠️ 建议增加 - 如果某账号频繁重试，可能是 MCP 限流或账号异常
+- `mcp_response_time_ms` ⚠️ 建议增加 - 监控 MCP 服务性能，超过阈值提前告警
+
+**2. QA 测试策略建议**：
+
+**分层测试计划**：
+```
+├── 单元测试（允灿自测）
+│   ├── MCP 客户端封装测试（mock MCP 返回）
+│   ├── 数据解析逻辑测试（边界值、空值、异常格式）
+│   └── AI 分析服务测试（mock LLM 返回）
+│
+├── 集成测试（我协助）
+│   ├── MCP 服务真实调用测试（用小号实测）
+│   ├── 数据库写入一致性测试
+│   └── 飞书 API 同步测试
+│
+├── 性能测试（我主导）
+│   ├── 并发采集测试（10 账号同时刷新）
+│   ├── 队列堆积测试（模拟 MCP 服务延迟）
+│   └── 数据库查询性能测试（百万级数据）
+│
+└── 监控告警测试（共同完成）
+    ├── 队列超阈值告警
+    ├── 数据异常告警（deviation_rate > 0.1）
+    └── MCP 服务不可用告警
+```
+
+**3. 关于数据一致性的疑问**：
+
+**场景 1**：如果 MCP 服务返回的数据格式突然变化（比如字段名从 `followers` 改成 `follower_count`），你的解析逻辑会怎么处理？
+- 建议：在 `mcp_client.py` 增加 schema 验证，字段缺失时记录 WARN 而不是直接报错
+
+**场景 2**：如果飞书 API 写入失败（网络问题/限流），数据会丢失吗？
+- 建议：实现本地 WAL（Write-Ahead Log），飞书写入失败时先写本地，后续重试
+
+**场景 3**：如果 Celery 任务执行到一半进程崩溃，如何保证不重复采集？
+- 建议：使用 Celery 的 `task_acks_late=True`（你已配置）+ 数据库唯一键约束（note_id + crawl_time）
+
+**4. 关于 AI 分析结构化输出的建议**：
+
+你的 `ai_analyzer.py` 设计很好！补充 3 个建议：
+
+```python
+# 增加字段验证
+result_schema = {
+    "tags": {"type": "list", "required": True, "max_length": 10},
+    "ai_suggestion": {"type": "string", "required": True, "max_length": 500},
+    "confidence_score": {"type": "float", "required": True, "min": 0, "max": 1}
+}
+
+# 增加 fallback 机制
+if confidence_score < 0.5:
+    # 低置信度时，标记为"待人工审核"，不直接写入飞书
+    log.warning(f"低置信度分析结果：{note_id}")
+    
+# 增加缓存（相同笔记不重复分析）
+@cache(ttl=86400)  # 24 小时缓存
+async def analyze_note(note_data: dict):
+    ...
+```
+
+**我的疑问**：
+- @允灿 MCP 客户端封装时，是否考虑了账号 Cookie 过期的处理？（小红书可能需要定期重新登录）
+- @允灿 你计划用什么方式做单元测试？pytest 还是 unittest？需要我帮你搭建测试框架吗？
+- @易达 姐夫，PRD 中是否需要"数据异常告警"功能？（比如某账号粉丝数突然暴跌 50%，系统自动飞书通知）
+
+**积分自评**：
+完成议题#008 发言 12 - 从 QA 视角补充数据质量表设计建议（3 个新增字段）、制定分层测试策略、提出 3 个数据一致性场景及解决方案、AI 分析结构化输出优化建议，自评 **+3 分**（质量保证 + 技术建议）
+
+---
+
+**【系统通知】** 2026-03-24 12:48
+- 少锋的发言已记录到 ISSUE_CONTENT.md
+- 飞书群通知已发送
+- 讨论继续进行中，当前发言数：12/60
