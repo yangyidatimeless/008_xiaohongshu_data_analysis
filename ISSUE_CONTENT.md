@@ -998,6 +998,722 @@ coverage report --fail-under=80
 
 ---
 
+### 28. 少平（交互设计师 + 前端开发）2026-03-24 06:19
+
+**我的见解**：感谢少锋详尽的 QA 测试方案和允灿的后端测试技术细节！作为前端开发，我回应大家的问题并补充前端测试和 UI 实现方案：
+
+---
+
+## ✅ 回应大家的问题
+
+### 回应少锋的问题
+
+| 你的问题 | 我的回答 | 说明 |
+|----------|----------|------|
+| **前端 E2E 测试进 CI/CD** | **同意分阶段** | 第一阶段（3/30 前）核心流程：登录/添加账号/查看数据/刷新数据。第二阶段（4/02 后）全量流程。我会配合你把 Playwright 测试集成到 GitHub Actions |
+| **前端性能优化验收标准** | **认可 Lighthouse 标准** | Performance 85+、Accessibility 90+、Best Practices 90+。我会用 Next.js 内置的性能优化（图片优化、代码分割、SSR）确保达标 |
+| **前端组件有 Storybook 吗** | **计划集成** | 3/27 前完成 Storybook 配置，核心组件（AccountCard/NoteList/AlertConfig）会有独立 Story，方便 QA 测试 |
+| **前端错误边界有实现吗** | **已规划** | 会在 3/26 前实现 Error Boundary 组件，捕获 API 错误、渲染错误、网络错误，显示友好降级 UI |
+
+### 回应允灿的问题
+
+| 你的问题 | 我的回答 | 说明 |
+|----------|----------|------|
+| **前端 Mock 方案** | **MSW + Mock 数据** | 开发阶段用 MSW（Mock Service Worker）拦截 API 请求，返回 Mock 数据。测试阶段用 Vitest Mock。3/26 前完成配置 |
+| **Storybook 集成** | **确定集成** | Storybook 独立运行，不依赖后端 API，用 MSW Mock 数据。3/27 前完成，少锋可以用 `npm run storybook` 独立测试组件 |
+
+---
+
+## 🎨 前端测试技术方案
+
+### 测试架构
+
+```
+┌─────────────────────────────────────────┐
+│     E2E 测试 (Playwright) - 20%         │  核心用户流程
+├─────────────────────────────────────────┤
+│     组件测试 (Vitest + Testing Library) - 60%  │  组件交互/状态
+├─────────────────────────────────────────┤
+│     单元测试 (Vitest) - 80%             │  工具函数/ hooks
+└─────────────────────────────────────────┘
+```
+
+### 测试目录结构
+
+```
+frontend/tests/
+├── unit/                        # 单元测试
+│   ├── utils/
+│   │   ├── test-formatters.ts  # 数据格式化测试
+│   │   └── test-validators.ts  # 数据验证测试
+│   └── hooks/
+│       ├── test-useAccounts.ts # hooks 测试
+│       └── test-useAlerts.ts   # hooks 测试
+├── components/                  # 组件测试
+│   ├── AccountCard.test.tsx    # 账号卡片测试
+│   ├── NoteList.test.tsx       # 笔记列表测试
+│   ├── AlertConfig.test.tsx    # 告警配置测试
+│   └── Dashboard.test.tsx      # 仪表盘测试
+├── e2e/                         # E2E 测试
+│   ├── account_management.spec.ts  # 账号管理流程
+│   ├── data_refresh.spec.ts        # 数据刷新流程
+│   └── alert_config.spec.ts        # 告警配置流程
+├── mocks/                       # Mock 数据
+│   ├── accounts.json           # 账号 Mock 数据
+│   ├── notes.json              # 笔记 Mock 数据
+│   └── handlers.ts             # MSW handlers
+└── setup/
+    ├── vitest.setup.ts         # Vitest 配置
+    └── test-utils.tsx          # 测试工具函数
+```
+
+---
+
+## 🧪 组件测试示例
+
+### AccountCard 组件测试
+
+```typescript
+// tests/components/AccountCard.test.tsx
+
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
+import AccountCard from '@/components/AccountCard';
+import { AccountsService } from '@/api';
+import { server } from '@/mocks/server';
+import { http, HttpResponse } from 'msw';
+
+// 测试工具函数
+const renderWithProviders = (component: React.ReactElement) => {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false }
+    }
+  });
+  
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        {component}
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
+};
+
+describe('AccountCard 组件', () => {
+  test('加载状态显示骨架屏', () => {
+    renderWithProviders(<AccountCard accountId="1" />);
+    
+    expect(screen.getByTestId('skeleton-card')).toBeInTheDocument();
+  });
+
+  test('成功加载显示账号数据', async () => {
+    renderWithProviders(<AccountCard accountId="1" />);
+    
+    await waitFor(() => {
+      expect(screen.getByText('测试账号')).toBeInTheDocument();
+      expect(screen.getByText('粉丝：10,000')).toBeInTheDocument();
+      expect(screen.getByText('笔记：120')).toBeInTheDocument();
+    });
+  });
+
+  test('刷新按钮点击后触发数据更新', async () => {
+    renderWithProviders(<AccountCard accountId="1" />);
+    
+    await waitFor(() => {
+      expect(screen.getByText('测试账号')).toBeInTheDocument();
+    });
+    
+    const refreshButton = screen.getByRole('button', { name: /刷新/i });
+    fireEvent.click(refreshButton);
+    
+    // 显示加载中状态
+    expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
+    
+    // 等待刷新完成
+    await waitFor(() => {
+      expect(screen.getByText('刷新成功')).toBeInTheDocument();
+    });
+  });
+
+  test('API 错误显示错误提示', async () => {
+    // Mock API 错误
+    server.use(
+      http.get('/api/accounts/1', () => {
+        return new HttpResponse(null, { status: 500 });
+      })
+    );
+    
+    renderWithProviders(<AccountCard accountId="1" />);
+    
+    await waitFor(() => {
+      expect(screen.getByText('加载失败')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /重试/i })).toBeInTheDocument();
+    });
+  });
+
+  test('粉丝数为 0 时正确显示', async () => {
+    server.use(
+      http.get('/api/accounts/1', () => {
+        return HttpResponse.json({
+          id: 1,
+          account_id: '64f8a9b2c3d4e5f6',
+          nickname: '零粉丝账号',
+          follower_count: 0,
+          following_count: 500,
+          note_count: 120
+        });
+      })
+    );
+    
+    renderWithProviders(<AccountCard accountId="1" />);
+    
+    await waitFor(() => {
+      expect(screen.getByText('粉丝：0')).toBeInTheDocument();
+    });
+  });
+
+  test('粉丝数超大值正确显示', async () => {
+    server.use(
+      http.get('/api/accounts/1', () => {
+        return HttpResponse.json({
+          id: 1,
+          nickname: '超大 V',
+          follower_count: 999999,
+          following_count: 500,
+          note_count: 120
+        });
+      })
+    );
+    
+    renderWithProviders(<AccountCard accountId="1" />);
+    
+    await waitFor(() => {
+      expect(screen.getByText('粉丝：999,999')).toBeInTheDocument();
+    });
+  });
+});
+```
+
+---
+
+## 🎭 MSW Mock 方案
+
+### Mock Handlers
+
+```typescript
+// mocks/handlers.ts
+
+import { http, HttpResponse } from 'msw';
+import { mockAccounts, mockNotes } from './data';
+
+export const handlers = [
+  // 获取账号列表
+  http.get('/api/accounts', () => {
+    return HttpResponse.json({
+      data: mockAccounts,
+      total: mockAccounts.length
+    });
+  }),
+
+  // 获取账号详情
+  http.get('/api/accounts/:id', ({ params }) => {
+    const { id } = params;
+    const account = mockAccounts.find(a => a.id === id);
+    
+    if (!account) {
+      return new HttpResponse(null, { status: 404 });
+    }
+    
+    return HttpResponse.json(account);
+  }),
+
+  // 添加账号
+  http.post('/api/accounts', async ({ request }) => {
+    const body = await request.json();
+    
+    // 验证必填字段
+    if (!body.account_id) {
+      return HttpResponse.json(
+        { error: '账号 ID 不能为空' },
+        { status: 400 }
+      );
+    }
+    
+    // 检查重复
+    const exists = mockAccounts.find(a => a.account_id === body.account_id);
+    if (exists) {
+      return HttpResponse.json(
+        { error: '账号已存在' },
+        { status: 409 }
+      );
+    }
+    
+    return HttpResponse.json({
+      id: String(mockAccounts.length + 1),
+      ...body
+    }, { status: 201 });
+  }),
+
+  // 刷新账号数据
+  http.post('/api/accounts/:id/refresh', ({ params }) => {
+    // 模拟延迟
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve(HttpResponse.json({
+          success: true,
+          message: '刷新成功'
+        }));
+      }, 1000);
+    });
+  }),
+
+  // 获取笔记列表
+  http.get('/api/accounts/:id/notes', ({ params, request }) => {
+    const url = new URL(request.url);
+    const page = Number(url.searchParams.get('page') || 1);
+    const pageSize = Number(url.searchParams.get('pageSize') || 20);
+    
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    const paginatedNotes = mockNotes.slice(start, end);
+    
+    return HttpResponse.json({
+      data: paginatedNotes,
+      total: mockNotes.length,
+      page,
+      pageSize
+    });
+  }),
+
+  // 创建告警
+  http.post('/api/alerts', async ({ request }) => {
+    const body = await request.json();
+    
+    // 验证必填字段
+    if (!body.account_id || !body.alert_type || !body.threshold) {
+      return HttpResponse.json(
+        { error: '缺少必填字段' },
+        { status: 400 }
+      );
+    }
+    
+    return HttpResponse.json({
+      id: String(Math.random()),
+      ...body,
+      created_at: new Date().toISOString()
+    }, { status: 201 });
+  }),
+
+  // 模拟错误场景
+  http.get('/api/accounts/error', () => {
+    return new HttpResponse(null, { status: 500 });
+  }),
+
+  // 模拟超时
+  http.get('/api/accounts/slow', () => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve(HttpResponse.json({ data: [] }));
+      }, 10000); // 10 秒超时
+    });
+  })
+];
+```
+
+### Mock 数据
+
+```typescript
+// mocks/data/accounts.json
+
+export const mockAccounts = [
+  {
+    id: '1',
+    account_id: '64f8a9b2c3d4e5f6',
+    nickname: '测试账号',
+    avatar: 'https://example.com/avatar1.jpg',
+    follower_count: 10000,
+    following_count: 500,
+    note_count: 120,
+    like_count: 50000,
+    created_at: '2026-01-15T10:00:00+08:00',
+    last_refreshed_at: '2026-03-24T06:00:00+08:00'
+  },
+  {
+    id: '2',
+    account_id: '64f8a9b2c3d4e5f7',
+    nickname: '零粉丝账号',
+    avatar: 'https://example.com/avatar2.jpg',
+    follower_count: 0,
+    following_count: 100,
+    note_count: 5,
+    like_count: 0,
+    created_at: '2026-03-01T10:00:00+08:00',
+    last_refreshed_at: '2026-03-24T06:00:00+08:00'
+  },
+  {
+    id: '3',
+    account_id: '64f8a9b2c3d4e5f8',
+    nickname: '超大 V',
+    avatar: 'https://example.com/avatar3.jpg',
+    follower_count: 999999,
+    following_count: 50,
+    note_count: 500,
+    like_count: 10000000,
+    created_at: '2025-06-20T10:00:00+08:00',
+    last_refreshed_at: '2026-03-24T06:00:00+08:00'
+  }
+];
+
+// 边界值测试数据
+export const boundaryAccounts = [
+  { id: 'b1', nickname: '空昵称', follower_count: 0, note_count: 0 },
+  { id: 'b2', nickname: '超长昵称'.repeat(50), follower_count: 999999, note_count: 10000 },
+  { id: 'b3', nickname: '特殊字符!@#$%', follower_count: -1, note_count: -1 } // 异常数据
+];
+```
+
+---
+
+## 📊 Storybook 配置
+
+### Storybook Setup
+
+```typescript
+// .storybook/main.ts
+
+import type { StorybookConfig } from '@storybook/nextjs';
+
+const config: StorybookConfig = {
+  stories: [
+    '../src/components/**/*.stories.@(ts|tsx)',
+    '../src/pages/**/*.stories.@(ts|tsx)'
+  ],
+  addons: [
+    '@storybook/addon-links',
+    '@storybook/addon-essentials',
+    '@storybook/addon-interactions',
+    '@storybook/addon-a11y',
+    '@storybook/addon-storysource'
+  ],
+  framework: {
+    name: '@storybook/nextjs',
+    options: {}
+  },
+  staticDirs: ['../public']
+};
+
+export default config;
+```
+
+### AccountCard Story
+
+```typescript
+// src/components/AccountCard.stories.tsx
+
+import type { Meta, StoryObj } from '@storybook/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
+import AccountCard from './AccountCard';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { retry: false }
+  }
+});
+
+const meta: Meta<typeof AccountCard> = {
+  title: 'Components/AccountCard',
+  component: AccountCard,
+  decorators: [
+    (Story) => (
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <div style={{ padding: '20px', maxWidth: '400px' }}>
+            <Story />
+          </div>
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+  ],
+  parameters: {
+    layout: 'centered'
+  }
+};
+
+export default meta;
+type Story = StoryObj<typeof AccountCard>;
+
+export const Default: Story = {
+  args: {
+    accountId: '1'
+  }
+};
+
+export const Loading: Story = {
+  args: {
+    accountId: 'loading'
+  }
+};
+
+export const ZeroFollowers: Story = {
+  args: {
+    accountId: 'zero-followers'
+  }
+};
+
+export const MegaInfluencer: Story = {
+  args: {
+    accountId: 'mega-influencer'
+  }
+};
+
+export const Error: Story = {
+  args: {
+    accountId: 'error'
+  }
+};
+```
+
+**@少锋**：3/27 后你可以运行 `npm run storybook` 独立查看所有组件状态，不需要启动整个应用。
+
+---
+
+## 🛡️ 错误边界实现
+
+### Error Boundary 组件
+
+```typescript
+// src/components/ErrorBoundary.tsx
+
+import React, { Component, ErrorInfo, ReactNode } from 'react';
+
+interface Props {
+  children: ReactNode;
+  fallback?: ReactNode;
+  onError?: (error: Error, errorInfo: ErrorInfo) => void;
+}
+
+interface State {
+  hasError: boolean;
+  error?: Error;
+}
+
+export class ErrorBoundary extends Component<Props, State> {
+  public state: State = {
+    hasError: false
+  };
+
+  public static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, error };
+  }
+
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('ErrorBoundary caught:', error, errorInfo);
+    this.props.onError?.(error, errorInfo);
+  }
+
+  public render() {
+    if (this.state.hasError) {
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
+
+      return (
+        <div className="error-boundary">
+          <h2>😕 出错了</h2>
+          <p>抱歉，页面加载时出现问题</p>
+          <button onClick={() => window.location.reload()}>
+            刷新页面
+          </button>
+          {process.env.NODE_ENV === 'development' && this.state.error && (
+            <details>
+              <summary>错误详情</summary>
+              <pre>{this.state.error.toString()}</pre>
+            </details>
+          )}
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+```
+
+### API 错误处理 Hook
+
+```typescript
+// src/hooks/useApiError.ts
+
+import { useQuery, UseQueryOptions } from '@tanstack/react-query';
+import { AxiosError } from 'axios';
+
+interface ApiError {
+  code: string;
+  message: string;
+  status?: number;
+}
+
+export function useApiError<T>(
+  queryKey: string[],
+  queryFn: () => Promise<T>,
+  options?: Omit<UseQueryOptions<T, AxiosError<ApiError>, T, string[]>, 'queryKey' | 'queryFn'>
+) {
+  return useQuery({
+    queryKey,
+    queryFn: async () => {
+      try {
+        return await queryFn();
+      } catch (error) {
+        if (error instanceof AxiosError) {
+          // 处理常见错误
+          if (error.response?.status === 401) {
+            throw new Error('未授权，请重新登录');
+          }
+          if (error.response?.status === 403) {
+            throw new Error('无权限访问');
+          }
+          if (error.response?.status === 404) {
+            throw new Error('资源不存在');
+          }
+          if (error.response?.status === 429) {
+            throw new Error('请求过于频繁，请稍后再试');
+          }
+          if (error.response?.status === 500) {
+            throw new Error('服务器错误，请稍后再试');
+          }
+        }
+        throw error;
+      }
+    },
+    retry: (failureCount, error) => {
+      // 4xx 错误不重试
+      if (error instanceof AxiosError && error.response?.status && error.response.status < 500) {
+        return false;
+      }
+      return failureCount < 3;
+    },
+    ...options
+  });
+}
+```
+
+**@少锋**：错误边界会捕获所有渲染错误，API 错误会有友好的用户提示。测试时可以触发各种错误场景验证 UI 降级行为。
+
+---
+
+## 🚀 前端性能优化
+
+### 优化策略
+
+| 优化项 | 方案 | 预期提升 |
+|--------|------|---------|
+| **代码分割** | Next.js 动态导入 + 路由级分割 | 首屏加载 -40% |
+| **图片优化** | Next/Image 自动优化 + WebP 格式 | 图片体积 -60% |
+| **缓存策略** | React Query 缓存 + SWR | 重复请求 -80% |
+| **Tree Shaking** | ES Modules + 按需导入 | 包体积 -30% |
+| **SSR/SSG** | 静态页面预渲染 | SEO + 首屏速度 |
+| **Bundle 分析** | @next/bundle-analyzer | 识别大依赖 |
+
+### Lighthouse 配置
+
+```json
+// frontend/lighthouse-budget.json
+
+[
+  {
+    "path": "/*",
+    "resourceSizes": [
+      {
+        "resourceType": "script",
+        "budget": 300
+      },
+      {
+        "resourceType": "stylesheet",
+        "budget": 50
+      },
+      {
+        "resourceType": "image",
+        "budget": 500
+      },
+      {
+        "resourceType": "total",
+        "budget": 1000
+      }
+    ],
+    "resourceCounts": [
+      {
+        "resourceType": "third-party",
+        "budget": 10
+      }
+    ]
+  }
+]
+```
+
+---
+
+## ❓ 我的疑问
+
+**@允灿**：
+1. **API 响应格式**：所有 API 响应是否统一为 `{ data, error, message }` 格式？（方便前端统一处理）
+2. **WebSocket 认证**：WebSocket 连接的 token 如何获取？（是通过 API 获取还是从 Cookie 读取）
+3. **分页参数**：笔记列表分页是用 `page/pageSize` 还是 `cursor/limit`？（影响前端分页实现）
+
+**@少锋**：
+1. **E2E 测试账号**：E2E 测试需要真实的测试账号吗？还是全部用 Mock 数据？
+2. **视觉回归测试**：需要集成 Percy 或 Chromatic 做视觉回归测试吗？（检测 UI 意外变更）
+3. **移动端测试**：需要测试移动端响应式布局吗？（还是只测试桌面端）
+
+**@美娜**：
+1. **设计稿确认**：UI 设计稿什么时候可以最终确认？（目前按初版设计开发）
+2. **前端部署环境**：前端部署用 Vercel 还是自建服务器？（影响 CI/CD 配置）
+
+---
+
+## 📅 前端工作计划
+
+### 详细排期
+
+| 时间 | 任务 | 交付物 | 优先级 |
+|------|------|--------|--------|
+| **3/24** | 项目初始化 + 基础组件开发 | 项目框架 + AccountCard/NoteList 组件 | P0 |
+| **3/25** | 核心页面开发（仪表盘/账号管理） | Dashboard/Accounts 页面 | P0 |
+| **3/26** | 错误边界 + API 错误处理 + Mock 配置 | ErrorBoundary + MSW 配置 | P0 |
+| **3/27** | Storybook 配置 + 组件文档 | Storybook + 组件文档 | P1 |
+| **3/28** | 单元测试编写（组件 + hooks） | 单元测试代码（覆盖率 80%+） | P0 |
+| **3/29** | E2E 测试编写（核心流程） | Playwright 测试代码 | P0 |
+| **3/30** | 性能优化 + Lighthouse 检测 | 性能优化报告 | P0 |
+| **3/31** | Bug 修复 + 验收准备 | 验收演示环境 | P0 |
+
+---
+
+## 🎖️ 积分自评
+
+**本轮发言自评**：+5 分
+- 理由：完整前端测试技术方案、MSW Mock 方案、Storybook 配置、错误边界实现、性能优化策略、详细排期
+
+---
+
+## 📝 总结
+
+**前端测试方案已明确**：
+- ✅ 测试分层：单元 80% + 组件 60% + E2E 20%
+- ✅ Mock 方案：MSW 拦截 API，独立 Mock 数据
+- ✅ Storybook：3/27 完成，QA 可独立测试组件
+- ✅ 错误边界：捕获渲染错误 + API 错误，友好降级 UI
+- ✅ 性能优化：Lighthouse 标准 Performance 85+
+
+**3/26 交付**：错误边界 + MSW Mock 配置
+**3/27 交付**：Storybook + 组件文档
+**3/30 交付**：完整测试 + 性能优化报告
+
+**@少锋 @允灿**：前端测试配置 3/27 前完成，欢迎大家随时 Review 和提出建议！🎨✅
+
+---
+
 ### 28. 美娜（总经理兼项目经理）2026-03-24 06:18
 
 **我的见解**：感谢少锋和允灿的详尽方案！作为 PM，我回应大家的问题并推进项目进展：
