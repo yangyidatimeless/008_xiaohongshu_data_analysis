@@ -338,3 +338,351 @@ async def test_refresh_account(client: AsyncClient, sample_account):
 **总结**：后端技术方案已明确，Python 3.11 + FastAPI + Alembic + 多层反爬策略。3/25 提供 Swagger Schema 给少平生成前端客户端，3/28 完成爬虫 MVP 和告警系统。测试和 CI/CD 与少锋协作完成！🐍✅
 
 ---
+
+### 24. 少平（交互设计师 + 前端开发）2026-03-24 05:56
+
+**我的见解**：感谢允灿详尽的后端技术方案！作为前端开发，我回应你的问题并补充前端技术选型和开发计划：
+
+---
+
+## ✅ 回应允灿的问题
+
+### 前端技术栈确认
+
+| 你的问题 | 我的决策 | 说明 |
+|----------|----------|------|
+| **HTTP 客户端库** | **React Query (TanStack Query) + Axios** | React Query 负责缓存/重试/轮询，Axios 负责底层请求 |
+| **前端开发端口** | **3000** | 与后端 8000 不冲突，Docker Compose 中会配置端口映射 |
+| **OpenAPI Generator** | **不需要额外类型定义** | 直接用你的 OpenAPI JSON 生成 TypeScript 类型和 API 客户端 |
+
+---
+
+## 🎨 前端技术方案
+
+### 技术栈选型
+
+**核心框架**：
+- **React 18** + **TypeScript** + **Vite**
+- **UI 组件库**：Ant Design 5.x（企业级组件丰富，适合数据后台）
+- **状态管理**：Zustand（轻量级，比 Redux 简单）
+- **数据请求**：React Query + Axios
+- **图表库**：ECharts（数据可视化强大，支持丰富图表类型）
+- **代码生成**：openapi-typescript-codegen（生成 TypeScript 客户端）
+
+**目录结构**：
+```
+frontend/
+├── src/
+│   ├── api/                    # OpenAPI 生成的客户端代码
+│   │   ├── core/              # 核心请求逻辑
+│   │   ├── services/          # 按模块分类的 API 服务
+│   │   └── types/             # TypeScript 类型定义
+│   ├── components/            # 公共组件
+│   │   ├── AccountCard/       # 账号卡片
+│   │   ├── NoteTable/         # 笔记表格
+│   │   ├── AlertList/         # 告警列表
+│   │   └── Chart/             # 图表组件
+│   ├── pages/                 # 页面
+│   │   ├── Dashboard/         # 数据概览
+│   │   ├── AccountManage/     # 账号管理
+│   │   ├── NoteAnalysis/      # 笔记分析
+│   │   ├── AlertConfig/       # 告警配置
+│   │   └── System/            # 系统设置
+│   ├── stores/                # Zustand 状态管理
+│   ├── hooks/                 # 自定义 Hooks
+│   ├── utils/                 # 工具函数
+│   ├── App.tsx
+│   └── main.tsx
+├── public/
+├── openapi.json               # 从后端同步的 OpenAPI Schema
+├── package.json
+└── vite.config.ts
+```
+
+---
+
+### OpenAPI 代码生成方案
+
+**生成脚本**：
+```bash
+# frontend/scripts/generate-api.sh
+#!/bin/bash
+
+# 从后端获取 OpenAPI JSON
+curl http://localhost:8000/openapi.json -o ./openapi.json
+
+# 生成 TypeScript 客户端
+npx openapi-typescript-codegen \
+  --input ./openapi.json \
+  --output ./src/api \
+  --client axios \
+  --useOptions \
+  --useUnionTypes
+
+echo "✅ API 客户端代码生成完成"
+```
+
+**package.json 配置**：
+```json
+{
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "generate:api": "bash scripts/generate-api.sh"
+  }
+}
+```
+
+**使用示例**：
+```typescript
+// 前端调用后端 API
+import { AccountsService, NotesService } from '@/api';
+
+// 获取账号列表
+const accounts = await AccountsService.listAccounts();
+
+// 添加账号
+const newAccount = await AccountsService.addAccount({
+  account_id: '64f8a9b2c3d4e5f6'
+});
+
+// 刷新账号数据
+await AccountsService.refreshAccount(accountId);
+```
+
+**@允灿**：你 3/25 提供 OpenAPI JSON 后，我运行 `npm run generate:api` 即可生成完整的 TypeScript 客户端，包含类型定义和 API 方法。不需要额外工作！
+
+---
+
+### 前端核心功能模块
+
+#### 1. 数据概览页（Dashboard）
+
+**功能**：
+- 监控账号总数、笔记总数、今日新增
+- 粉丝数趋势图（近 7 天/30 天）
+- 互动数据概览（点赞/收藏/评论）
+- 待处理告警列表
+
+**技术实现**：
+- ECharts 折线图展示趋势
+- React Query 轮询（每 5 分钟刷新）
+- 告警 WebSocket 实时推送
+
+#### 2. 账号管理页
+
+**功能**：
+- 账号列表（表格展示，支持搜索/筛选）
+- 添加账号（输入小红书账号 ID）
+- 账号详情（粉丝数、笔记数、历史趋势）
+- 手动刷新账号数据
+
+**技术实现**：
+- Ant Design Table + Pagination
+- 批量操作（批量刷新、批量删除）
+- 刷新状态实时反馈
+
+#### 3. 笔记分析页
+
+**功能**：
+- 笔记列表（封面图、标题、互动数据）
+- 笔记详情（完整内容、评论数据）
+- 数据对比（多篇笔记数据对比）
+- 导出功能（CSV/Excel）
+
+**技术实现**：
+- 虚拟滚动优化大数据量
+- ECharts 对比柱状图
+- 文件下载 API 集成
+
+#### 4. 告警配置页
+
+**功能**：
+- 告警规则列表
+- 添加/编辑告警规则
+- 告警历史记录
+- WebSocket 实时告警推送
+
+**技术实现**：
+- WebSocket 连接管理（自动重连）
+- 告警通知（浏览器 Notification API）
+- 规则表单验证
+
+---
+
+## 🐳 Docker Compose 集成
+
+**前端 Dockerfile**：
+```dockerfile
+# frontend/Dockerfile
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+```
+
+**Docker Compose 配置**：
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"  # 映射到宿主机 3000 端口
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_BASE_URL=http://backend:8000
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+    environment:
+      - DATABASE_URL=postgresql://user:pass@db:5432/xiaohongshu
+      - REDIS_URL=redis://redis:6379
+
+  db:
+    image: postgres:15-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+      - POSTGRES_DB=xiaohongshu
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
+```
+
+**@允灿**：前端 Dockerfile 和 Docker Compose 配置我来编写，3/28 前完成，与你后端集成。
+
+---
+
+## 📐 前端开发计划
+
+### 详细排期
+
+| 时间 | 任务 | 交付物 |
+|------|------|--------|
+| **3/24** | 前端项目初始化（Vite + React + TS + Ant Design） | 可运行的空项目 |
+| **3/25** | 等待允灿 OpenAPI Schema，生成 API 客户端 | src/api/ 目录 |
+| **3/26** | 账号管理页开发（列表/详情/添加/刷新） | 功能完成 |
+| **3/27** | 笔记分析页开发（列表/详情/对比/导出） | 功能完成 |
+| **3/28** | 数据概览页 + 告警配置页 + WebSocket 集成 | 功能完成 |
+| **3/29** | 前后端联调 + Bug 修复 | 联调报告 |
+| **3/30** | UI 优化 + 响应式适配 + 性能优化 | 性能测试报告 |
+| **3/31** | Docker 集成 + 部署文档 | Docker Compose + README |
+
+---
+
+## 🧪 前端测试方案
+
+### 测试工具链
+
+- **单元测试**：Vitest + React Testing Library
+- **E2E 测试**：Playwright
+- **覆盖率**：Vitest 内置覆盖率报告
+
+**测试覆盖率目标**：
+- 语句覆盖率：75%+
+- 分支覆盖率：70%+
+- 组件覆盖率：80%+
+
+**示例**：
+```typescript
+// tests/AccountCard.test.tsx
+import { render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import AccountCard from '@/components/AccountCard';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { retry: false }
+  }
+});
+
+test('显示账号信息', async () => {
+  render(
+    <QueryClientProvider client={queryClient}>
+      <AccountCard accountId="64f8a9b2c3d4e5f6" />
+    </QueryClientProvider>
+  );
+  
+  await waitFor(() => {
+    expect(screen.getByText('测试账号')).toBeInTheDocument();
+    expect(screen.getByText('粉丝：10000')).toBeInTheDocument();
+  });
+});
+```
+
+**@少锋**：前端测试用 Vitest（与 Vite 无缝集成），测试脚本放在 `tests/` 目录。3/26 开始编写，3/30 完成全部测试。
+
+---
+
+## ❓ 我的疑问
+
+**@允灿**：
+1. WebSocket 告警推送的协议格式是什么？（JSON Schema 有定义吗？）
+2. 文件导出接口是直接返回文件流还是需要前端轮询任务状态？
+3. 后端 CORS 配置会允许前端 3000 端口跨域吗？
+
+**@少锋**：
+1. 前端 E2E 测试用 Playwright，需要配置到 CI/CD 流程中吗？
+2. 前端性能优化（如 Lighthouse 评分）需要纳入验收标准吗？
+
+**@美娜**：
+1. 前端 UI 设计稿需要我先出原型图确认吗？还是直接用 Ant Design 默认风格？
+2. 4/02 验收演示时，需要部署到云服务器演示还是本地演示即可？
+
+---
+
+## 🎖️ 积分自评
+
+**本轮发言自评**：+5 分
+- 理由：完整回应允灿问题、前端技术栈选型、OpenAPI 集成方案、Docker Compose 配置、开发排期、测试方案
+
+---
+
+## 📅 下一步行动
+
+**今日工作计划（3/24）**：
+1. **上午**：前端项目初始化（Vite + React 18 + TypeScript + Ant Design）
+2. **下午**：搭建项目目录结构 + 配置 ESLint/Prettier
+3. **晚上**：编写基础组件（AccountCard、NoteTable）
+
+**本周里程碑**：
+- **3/25**：等待允灿 OpenAPI Schema，生成 API 客户端
+- **3/26**：账号管理页开发完成
+- **3/27**：笔记分析页开发完成
+- **3/28**：全部页面开发完成 + WebSocket 集成
+
+**依赖项**：
+- 等待允灿提供 OpenAPI JSON（3/25）
+- 等待美娜确认 UI 设计风格
+
+---
+
+**总结**：前端技术方案已明确，React 18 + TypeScript + Ant Design + OpenAPI 自动生成客户端。3/25 生成 API 代码，3/28 完成全部页面开发，3/31 完成 Docker 集成和部署！🎨✅
+
+---
