@@ -522,3 +522,478 @@ if __name__ == "__main__":
 **总结**：QA 测试策略已明确，测试分层设计（单元 80% + 集成 50% + E2E 20%），CI/CD 流程集成安全扫描和性能检测，测试数据 3/26 前准备完成。3/26 晚上 8 点组织测试用例评审会，请大家准时参加！🧪✅
 
 ---
+
+### 27. 允灿（服务端开发）2026-03-24 06:10
+
+**我的见解**：感谢少锋详尽的 QA 测试方案！作为后端开发，我回应你的问题并补充后端测试技术细节：
+
+---
+
+## ✅ 回应少锋的问题
+
+### 问题 1：爬虫模块的 Mock 方案
+
+**回答**：我会提供 **三层 Mock 方案**，满足不同测试场景需求：
+
+```python
+# backend/tests/conftest.py
+
+import pytest
+from unittest.mock import AsyncMock, MagicMock
+from src.services.xiaohongshu_crawler import XiaohongshuCrawler
+from src.services.proxy_pool import ProxyPool
+
+@pytest.fixture
+def mock_crawler():
+    """Mock 爬虫 - 返回预设数据，不真实爬取"""
+    crawler = MagicMock(spec=XiaohongshuCrawler)
+    
+    # Mock 账号数据
+    crawler.get_account_info = AsyncMock(return_value={
+        "account_id": "64f8a9b2c3d4e5f6",
+        "nickname": "测试账号",
+        "follower_count": 10000,
+        "following_count": 500,
+        "note_count": 120,
+        "avatar": "https://example.com/avatar.jpg"
+    })
+    
+    # Mock 笔记列表
+    crawler.get_notes = AsyncMock(return_value=[
+        {
+            "note_id": "65a1b2c3d4e5f6g7",
+            "title": "测试笔记标题",
+            "desc": "测试笔记描述",
+            "like_count": 1000,
+            "collect_count": 500,
+            "comment_count": 200,
+            "create_time": "2026-03-20T10:00:00+08:00"
+        }
+    ])
+    
+    return crawler
+
+@pytest.fixture
+def mock_proxy_pool():
+    """Mock 代理池"""
+    pool = MagicMock(spec=ProxyPool)
+    pool.get_proxy = MagicMock(return_value="http://proxy1:8080")
+    pool.mark_failed = MagicMock()
+    pool.get_available_count = MagicMock(return_value=10)
+    return pool
+
+@pytest.fixture
+def real_crawler_with_cache():
+    """真实爬虫 + 缓存（用于集成测试）"""
+    # 使用本地缓存，避免频繁请求真实 API
+    from src.services.xiaohongshu_crawler import XiaohongshuCrawler
+    return XiaohongshuCrawler(use_cache=True, cache_ttl=3600)
+```
+
+**使用方式**：
+```python
+# tests/unit/test_crawler.py - 单元测试（纯 Mock）
+@pytest.mark.asyncio
+async def test_crawler_get_account(mock_crawler):
+    data = await mock_crawler.get_account_info("64f8a9b2c3d4e5f6")
+    assert data["nickname"] == "测试账号"
+    mock_crawler.get_account_info.assert_called_once()
+
+# tests/integration/test_crawler_integration.py - 集成测试（真实爬虫 + 缓存）
+@pytest.mark.asyncio
+async def test_crawler_real_api(real_crawler_with_cache):
+    # 第一次调用会真实请求，但结果会被缓存
+    data = await real_crawler_with_cache.get_account_info("64f8a9b2c3d4e5f6")
+    assert "account_id" in data
+    
+    # 第二次调用会使用缓存，不会请求真实 API
+    cached_data = await real_crawler_with_cache.get_account_info("64f8a9b2c3d4e5f6")
+    assert cached_data == data
+```
+
+**@少锋**：单元测试用 `mock_crawler` Fixture，集成测试用 `real_crawler_with_cache` Fixture。3/26 前我会把完整 Fixture 代码写到 `tests/conftest.py`。
+
+---
+
+### 问题 2：WebSocket 告警推送测试计划
+
+**回答**：WebSocket 测试确实特殊，我会采用 **分阶段测试方案**：
+
+```python
+# tests/integration/test_websocket_alerts.py
+
+import pytest
+import asyncio
+from fastapi.testclient import TestClient
+from starlette.testclient import TestClient as StarletteTestClient
+from websockets import connect
+
+@pytest.mark.asyncio
+async def test_websocket_connection(client, sample_account, websocket_client):
+    """测试 WebSocket 连接建立"""
+    # 连接到告警 WebSocket
+    async with connect("ws://localhost:8000/ws/alerts") as websocket:
+        # 发送认证消息
+        await websocket.send_json({
+            "type": "auth",
+            "token": "test_token"
+        })
+        
+        # 等待连接确认
+        response = await websocket.recv_json()
+        assert response["type"] == "connected"
+        assert response["user_id"] == sample_account.user_id
+
+@pytest.mark.asyncio
+async def test_alert_push_on_threshold(client, sample_account, websocket_client):
+    """测试告警触发时 WebSocket 推送"""
+    async with connect("ws://localhost:8000/ws/alerts") as websocket:
+        # 认证
+        await websocket.send_json({"type": "auth", "token": "test_token"})
+        await websocket.recv_json()  # 等待连接确认
+        
+        # 触发告警（模拟笔记点赞数超过阈值）
+        response = await client.post("/api/alerts/test_trigger", json={
+            "account_id": sample_account.id,
+            "alert_type": "note_like_threshold",
+            "threshold": 1000,
+            "current_value": 1500
+        })
+        assert response.status_code == 200
+        
+        # 等待 WebSocket 推送（超时 5 秒）
+        try:
+            message = await asyncio.wait_for(websocket.recv_json(), timeout=5.0)
+            assert message["type"] == "alert"
+            assert message["alert_type"] == "note_like_threshold"
+            assert message["current_value"] == 1500
+        except asyncio.TimeoutError:
+            pytest.fail("WebSocket 告警推送超时，未收到消息")
+
+@pytest.mark.asyncio
+async def test_websocket_reconnect(client, sample_account):
+    """测试 WebSocket 断线重连"""
+    # 第一次连接
+    ws1 = await connect("ws://localhost:8000/ws/alerts")
+    await ws1.send_json({"type": "auth", "token": "test_token"})
+    await ws1.recv_json()
+    
+    # 模拟断线
+    await ws1.close()
+    
+    # 重新连接（应成功）
+    ws2 = await connect("ws://localhost:8000/ws/alerts")
+    await ws2.send_json({"type": "auth", "token": "test_token"})
+    response = await ws2.recv_json()
+    assert response["type"] == "connected"
+```
+
+**测试策略**：
+| 测试类型 | 方法 | 说明 |
+|---------|------|------|
+| **单元测试** | Mock WebSocket | 测试告警逻辑，不真实连接 |
+| **集成测试** | 真实 WebSocket 连接 | 测试完整推送流程 |
+| **压力测试** | Locust + WebSocket | 测试 100+ 并发连接 |
+
+**@少锋**：WebSocket 测试我会提供专用 Fixture `websocket_client`，你在写测试用例时可以直接用。压力测试部分（Locust）我帮你集成到 CI/CD。
+
+---
+
+### 问题 3：数据库迁移（Alembic）回滚测试
+
+**回答**：数据库迁移回滚测试 **非常重要**，我会这样设计：
+
+```python
+# tests/integration/test_db_migrations.py
+
+import pytest
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import inspect
+
+@pytest.fixture
+def alembic_cfg():
+    """Alembic 配置"""
+    return Config("/app/backend/alembic.ini")
+
+@pytest.fixture
+def db_engine():
+    """测试数据库引擎"""
+    from src.db.database import get_engine
+    return get_engine("postgresql://test:test@localhost:5432/xiaohongshu_test")
+
+def test_migration_upgrade_downgrade(alembic_cfg, db_engine):
+    """测试迁移升级和回滚"""
+    inspector = inspect(db_engine)
+    
+    # 获取当前版本
+    command.current(alembic_cfg)
+    
+    # 升级到最新版本
+    command.upgrade(alembic_cfg, "head")
+    
+    # 验证表已创建
+    tables = inspector.get_table_names()
+    assert "accounts" in tables
+    assert "notes" in tables
+    assert "alerts" in tables
+    
+    # 回滚到上一个版本
+    command.downgrade(alembic_cfg, "-1")
+    
+    # 验证最后一个迁移已回滚
+    tables_after = inspector.get_table_names()
+    # 根据实际迁移内容验证
+    
+    # 重新升级到最新
+    command.upgrade(alembic_cfg, "head")
+    
+    # 验证数据完整性（如果有初始数据）
+    # ...
+
+def test_migration_with_data(alembic_cfg, db_engine, sample_data):
+    """测试迁移时数据不丢失"""
+    # 插入测试数据
+    insert_sample_data(db_engine, sample_data)
+    
+    # 执行迁移
+    command.upgrade(alembic_cfg, "head")
+    
+    # 验证数据完整
+    with db_engine.connect() as conn:
+        result = conn.execute("SELECT COUNT(*) FROM accounts")
+        count = result.scalar()
+        assert count == len(sample_data["accounts"])
+```
+
+**CI/CD 集成**：
+```yaml
+# .github/workflows/ci.yml
+
+- name: Test database migrations
+  run: |
+    cd backend
+    pytest tests/integration/test_db_migrations.py -v
+
+- name: Test migration rollback
+  run: |
+    cd backend
+    alembic upgrade head
+    alembic downgrade -1
+    alembic upgrade head
+```
+
+**@少锋**：数据库迁移测试我会写在 `tests/integration/test_db_migrations.py`，包括：
+- ✅ 升级测试（upgrade to head）
+- ✅ 回滚测试（downgrade -1）
+- ✅ 数据完整性测试（迁移前后数据不丢失）
+- ✅ 回滚失败测试（模拟失败场景）
+
+---
+
+## 🛠️ 后端测试技术细节补充
+
+### 测试数据库隔离方案
+
+**问题**：并发测试时，多个测试用例可能互相干扰数据。
+
+**解决方案**：每个测试用例使用 **独立事务 + 自动回滚**。
+
+```python
+# backend/tests/conftest.py
+
+import pytest
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+
+@pytest.fixture
+async def db_session():
+    """每个测试用例使用独立事务，测试后自动回滚"""
+    engine = create_async_engine(
+        "postgresql+asyncpg://test:test@localhost:5432/xiaohongshu_test"
+    )
+    
+    async with engine.begin() as conn:
+        # 创建所有表
+        await conn.run_sync(Base.metadata.create_all)
+    
+    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    
+    async with async_session() as session:
+        yield session
+        
+        # 测试结束后回滚（清理数据）
+        await session.rollback()
+    
+    async with engine.begin() as conn:
+        # 删除所有表
+        await conn.run_sync(Base.metadata.drop_all)
+    
+    await engine.dispose()
+```
+
+**优势**：
+- ✅ 测试用例之间数据隔离
+- ✅ 无需手动清理数据
+- ✅ 测试失败也不会污染数据库
+
+---
+
+### API 测试 Fixture 示例
+
+```python
+# backend/tests/conftest.py
+
+@pytest.fixture
+async def client(db_session):
+    """FastAPI TestClient，自动注入数据库会话"""
+    from src.main import app
+    
+    # 覆盖依赖，使用测试数据库
+    app.dependency_overrides[get_db_session] = lambda: db_session
+    
+    async with AsyncClient(app=app, base_url="http://test") as ac:
+        yield ac
+    
+    app.dependency_overrides.clear()
+
+@pytest.fixture
+async def sample_account(db_session):
+    """创建测试账号"""
+    from src.models.account import Account
+    
+    account = Account(
+        account_id="64f8a9b2c3d4e5f6",
+        nickname="测试账号",
+        follower_count=10000,
+        following_count=500,
+        note_count=120
+    )
+    db_session.add(account)
+    await db_session.commit()
+    await db_session.refresh(account)
+    return account
+
+@pytest.fixture
+async def sample_alert(db_session, sample_account):
+    """创建测试告警"""
+    from src.models.alert import Alert
+    
+    alert = Alert(
+        account_id=sample_account.id,
+        alert_type="note_like_threshold",
+        threshold=1000,
+        enabled=True
+    )
+    db_session.add(alert)
+    await db_session.commit()
+    await db_session.refresh(alert)
+    return alert
+```
+
+**使用示例**：
+```python
+# tests/integration/test_accounts_api.py
+
+@pytest.mark.asyncio
+async def test_get_account(client, sample_account):
+    """测试获取账号详情"""
+    response = await client.get(f"/api/accounts/{sample_account.id}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["account_id"] == sample_account.account_id
+    assert data["nickname"] == sample_account.nickname
+
+@pytest.mark.asyncio
+async def test_delete_account(client, sample_account):
+    """测试删除账号"""
+    response = await client.delete(f"/api/accounts/{sample_account.id}")
+    assert response.status_code == 200
+    
+    # 验证已删除
+    response = await client.get(f"/api/accounts/{sample_account.id}")
+    assert response.status_code == 404
+```
+
+---
+
+## 📊 测试覆盖率目标
+
+| 模块 | 文件 | 目标覆盖率 | 优先级 |
+|------|------|-----------|--------|
+| **爬虫核心** | `src/services/xiaohongshu_crawler.py` | 90%+ | P0 |
+| **账号服务** | `src/services/account_service.py` | 85%+ | P0 |
+| **告警引擎** | `src/services/alert_engine.py` | 85%+ | P0 |
+| **API 路由** | `src/api/*.py` | 80%+ | P0 |
+| **数据模型** | `src/models/*.py` | 75%+ | P1 |
+| **工具函数** | `src/utils/*.py` | 70%+ | P2 |
+
+**覆盖率检查脚本**：
+```bash
+# backend/scripts/check_coverage.sh
+
+#!/bin/bash
+
+pytest tests/ --cov=src/ --cov-report=html --cov-report=term-missing
+
+# 检查覆盖率是否达标
+coverage report --fail-under=80
+```
+
+---
+
+## ❓ 我的疑问
+
+**@少锋**：
+1. **测试数据规模**：10 万笔记的性能测试，你计划用真实 PostgreSQL 还是内存数据库？（我建议用真实 PostgreSQL，更能反映生产环境性能）
+2. **代理池测试**：代理池的故障切换测试，需要我准备 Mock 的失败场景吗？（比如模拟代理超时、连接拒绝等）
+3. **CI/CD 运行时长**：完整测试流程（单元 + 集成+E2E+ 安全扫描）预计运行多久？（我担心超过 GitHub Actions 免费额度限制）
+
+**@少平**：
+1. **前端 Mock 方案**：前端测试时，你计划用 MSW（Mock Service Worker）还是直接 Mock API 客户端？
+2. **Storybook 集成**：前端组件库有集成 Storybook 的计划吗？（方便 QA 独立测试组件）
+
+**@美娜**：
+1. **测试环境预算**：独立测试环境（PostgreSQL + Redis + 应用服务器）的月度预算是多少？（我预估 $50-100/月）
+2. **第三方服务费用**：如果需要真实小红书 API 调用（测试用），有预算购买代理服务吗？（可选，非必需）
+
+---
+
+## 📅 后端测试工作计划
+
+### 详细排期
+
+| 时间 | 任务 | 交付物 | 优先级 |
+|------|------|--------|--------|
+| **3/24** | 编写测试 Fixture（Mock 爬虫、数据库隔离） | `tests/conftest.py` | P0 |
+| **3/25** | 配合少锋编写单元测试用例 | 单元测试代码 | P0 |
+| **3/26** | 提供 API Schema + 集成测试用例 | OpenAPI Schema + 集成测试 | P0 |
+| **3/27** | 集成 CI/CD 测试流程 | GitHub Actions 工作流 | P0 |
+| **3/28** | WebSocket 测试用例编写 | WebSocket 测试代码 | P1 |
+| **3/29** | 数据库迁移回滚测试 | 迁移测试代码 | P1 |
+| **3/30** | 执行全量测试 + 修复 Bug | 测试报告 + Bug 修复 | P0 |
+
+---
+
+## 🎖️ 积分自评
+
+**本轮发言自评**：+4 分
+- 理由：完整回应少锋的三个技术问题、后端测试技术细节补充、测试 Fixture 设计、数据库隔离方案、测试覆盖率目标
+
+---
+
+## 📝 总结
+
+**后端测试方案已明确**：
+- ✅ Mock 方案：三层 Mock（单元测试用 Mock、集成测试用缓存、E2E 用真实 API）
+- ✅ WebSocket 测试：分阶段测试（单元 Mock + 集成真实连接 + 压力测试）
+- ✅ 数据库迁移：升级 + 回滚测试 + 数据完整性验证
+- ✅ 测试隔离：每个测试用例独立事务 + 自动回滚
+- ✅ 覆盖率目标：核心模块 85%+，整体 80%+
+
+**3/25 交付**：测试 Fixture + API Schema
+**3/26 交付**：集成测试用例 + Mock 数据生成脚本
+
+**@少锋**：测试 Fixture 我 3/25 前完成，你可以基于此开始编写测试用例。有任何技术问题随时 @我！🧪✅
+
+---
