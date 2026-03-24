@@ -426,3 +426,339 @@ export const useAlertStore = create<AlertStore>((set, get) => ({
 **总结**：技术方案已全面确认，三位成员分工明确。我会持续跟进进度，确保 4/02 顺利完成验收！大家加油！💪📊
 
 ---
+
+### 22. 少锋（质量保障工程师）2026-03-24 13:45
+
+**我的见解**：感谢美娜的积分鼓励和项目部署安排！我从 QA 测试和 CI/CD 角度回应问题并补充测试环境方案：
+
+---
+
+## ✅ 回应美娜的问题
+
+### Docker Compose 方案
+
+**我的建议**：**协作编写，允灿主导，我配合测试**
+
+**理由**：
+- 允灿最了解后端服务的依赖关系（PostgreSQL/Redis/应用容器）
+- 少平需要了解前端容器化配置（Nginx 反向代理/静态资源服务）
+- 我负责验证 Compose 文件的一键启动和测试环境隔离
+
+**Docker Compose 结构建议**：
+```yaml
+# docker-compose.yml
+version: '3.8'
+services:
+  # 后端服务
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://user:pass@db:5432/xiaohongshu
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./backend:/app  # 开发模式热加载
+  
+  # 前端服务
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+  
+  # 数据库
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=xiaohongshu
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+  
+  # 缓存
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+  
+  # 测试环境（独立网络，避免污染开发环境）
+  test:
+    build: .
+    command: pytest tests/ --cov=src --cov-report=html
+    environment:
+      - TEST_MODE=true
+      - DATABASE_URL=postgresql://user:pass@db_test:5432/xiaohongshu_test
+    depends_on:
+      - db_test
+    networks:
+      - test_network
+  
+  db_test:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=xiaohongshu_test
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+    networks:
+      - test_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+  test_network:
+```
+
+**交付计划**：
+- **3/25**：允灿提供后端 Dockerfile 和基础 Compose 文件
+- **3/26**：少平补充前端 Dockerfile（Nginx 配置）
+- **3/27**：我验证一键启动并补充测试环境配置
+- **3/28**：完成 CI/CD 集成
+
+---
+
+### CI/CD 流程集成建议
+
+**我的建议**：**分阶段集成，优先保证质量门禁**
+
+**GitHub Actions 工作流设计**：
+
+```yaml
+# .github/workflows/ci.yml
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # 1. 代码规范检查（最快，最早失败）
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Backend Lint (Ruff/Black)
+        run: |
+          cd backend
+          pip install ruff black
+          ruff check .
+          black --check .
+      - name: Frontend Lint (ESLint/Prettier)
+        run: |
+          cd frontend
+          npm ci
+          npm run lint
+          npm run format:check
+
+  # 2. 单元测试 + 覆盖率检查（核心质量门禁）
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: test
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: pass
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v4
+      - name: Backend Tests
+        run: |
+          cd backend
+          pip install -r requirements.txt
+          pytest tests/ --cov=src --cov-report=xml --cov-fail-under=80
+      - name: Frontend Tests
+        run: |
+          cd frontend
+          npm ci
+          npm run test:coverage -- --coverage.thresholds.lines=80
+      - name: Upload Coverage Report
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./backend/coverage.xml,./frontend/coverage/coverage-final.json
+
+  # 3. E2E 测试（最慢，最后执行）
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start Docker Compose
+        run: docker-compose up -d
+      - name: Wait for services
+        run: |
+          sleep 30  # 等待服务启动
+          curl -f http://localhost:8000/docs || exit 1
+      - name: Run E2E Tests
+        run: |
+          cd frontend
+          npm ci
+          npm run test:e2e
+      - name: Upload E2E Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+
+  # 4. 安全扫描（可选，定期执行）
+  security:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Backend Security (Bandit)
+        run: |
+          cd backend
+          pip install bandit
+          bandit -r src/
+      - name: Frontend Security (npm audit)
+        run: |
+          cd frontend
+          npm audit --audit-level=high
+```
+
+**集成检查清单**：
+
+| 检查项 | 工具 | 触发时机 | 阻断合并 |
+|--------|------|----------|----------|
+| **代码规范** | Ruff/Black (后端) + ESLint/Prettier (前端) | 每次 PR | ✅ 是 |
+| **单元测试** | Pytest (后端) + Vitest (前端) | 每次 PR | ✅ 是（覆盖率<80% 失败） |
+| **覆盖率报告** | Coverage.py + Vitest Coverage | 每次 PR | ✅ 是 |
+| **E2E 测试** | Playwright | 每次 PR | ✅ 是 |
+| **安全扫描** | Bandit (后端) + npm audit (前端) | 仅 main 分支推送 | ❌ 否（仅告警） |
+| **Docker 构建** | Docker Build | 每次 PR | ✅ 是 |
+| **集成部署** | Docker Compose | main 分支合并后 | - |
+
+---
+
+## 🧪 QA 测试环境方案
+
+### 环境隔离策略
+
+**三级环境设计**：
+
+| 环境 | 用途 | 数据源 | 触发方式 |
+|------|------|--------|----------|
+| **开发环境** | 本地开发调试 | Mock 数据 / 本地数据库 | `docker-compose up` |
+| **测试环境** | CI 自动化测试 | 独立测试数据库（每次重建） | GitHub Actions PR 触发 |
+| **预发布环境** | 验收演示 | 真实数据（脱敏） | 手动部署 |
+
+### 测试数据管理
+
+**方案**：
+1. **Fixture 文件**：准备标准测试数据集（JSON/YAML 格式）
+2. **工厂模式**：用 Factory Boy (后端) + Faker 生成随机测试数据
+3. **数据重置**：每次测试前自动清空数据库，确保测试隔离
+
+**示例**：
+```python
+# tests/conftest.py
+import pytest
+from factory import Faker
+
+@pytest.fixture
+def sample_account(db_session):
+    """创建一个测试账号"""
+    account = Account(
+        account_id=Faker('numerify', text='##########'),
+        nickname=Faker('name'),
+    )
+    db_session.add(account)
+    db_session.commit()
+    return account
+
+@pytest.fixture(autouse=True)
+def reset_db(db_session):
+    """每次测试前清空数据库"""
+    db_session.execute(text('DELETE FROM accounts CASCADE'))
+    db_session.commit()
+    yield
+```
+
+---
+
+## 📋 QA 检查清单
+
+### 代码审查 Checklist
+
+**我会在 PR 审查时关注**：
+
+**后端检查项**：
+- [ ] API 接口有完整的输入验证
+- [ ] 数据库查询有索引优化
+- [ ] 异常处理有日志记录
+- [ ] 敏感信息（Token/密码）未硬编码
+- [ ] 单元测试覆盖率 >= 80%
+
+**前端检查项**：
+- [ ] 组件有 PropTypes/TypeScript 类型定义
+- [ ] 表单有前端验证
+- [ ] 异步操作有加载状态和错误处理
+- [ ] 无障碍访问（a11y）基础检查
+- [ ] 单元测试覆盖率 >= 80%
+
+**E2E 检查项**：
+- [ ] 核心流程有完整测试（登录→添加账号→查看数据→导出）
+- [ ] 边界条件有测试（空数据/大数据量/网络错误）
+- [ ] 跨浏览器测试（Chrome/Firefox/Safari）
+
+---
+
+## ❓ 我的疑问
+
+**@允灿**：
+1. 后端计划用哪个 Python 版本？（建议 3.11+，性能好且类型提示完善）
+2. 数据库迁移工具用 Alembic 还是 SQLAlchemy 自带迁移？
+3. 爬虫部分的代理池有现成方案吗？还是需要自己搭建？
+
+**@少平**：
+1. 前端构建产物（dist）需要配置 CDN 加速吗？还是直接用 Nginx 静态服务？
+2. 浏览器通知权限需要设计引导流程吗？（首次访问时提示用户授权）
+
+**@美娜**：
+1. 4/02 验收演示需要准备演示脚本吗？还是自由演示？
+2. 项目上线后需要设计用户手册/操作文档吗？还是口头培训即可？
+
+---
+
+## 🎖️ 积分自评
+
+**本轮发言自评**：+5 分
+- 理由：完整的 Docker Compose 方案、CI/CD 工作流设计、QA 检查清单、测试数据管理方案
+
+---
+
+## 📅 下一步行动
+
+**本周工作计划**：
+1. **3/24**：准备 Docker Compose 模板初稿
+2. **3/25**：与允灿协作完善后端容器化配置
+3. **3/26**：编写测试 Fixture 和工厂模式代码
+4. **3/27**：搭建 CI/CD 工作流（GitHub Actions）
+5. **3/28**：验证一键启动和测试环境隔离
+
+**依赖项**：
+- 等待允灿提供后端 Dockerfile
+- 等待少平提供前端 Dockerfile
+
+---
+
+**总结**：QA 测试环境和 CI/CD 方案已明确，我会与允灿协作完成 Docker Compose 配置，确保 3/28 前完成测试环境搭建。代码规范和覆盖率门禁会集成到 CI 流程，保证代码质量！🧪✅
+
+---
