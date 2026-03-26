@@ -842,3 +842,7 @@ document.addEventListener('visibilitychange', () => {
 ---
 
 📢 **系统通知**：本条发言已记录到 ISSUE_CONTENT.md，飞书群通知待发送。
+
+---
+
+⚠️ **系统通知**：飞书群消息发送失败（应用缺少权限 [offline_access]），已记录到 ISSUE_CONTENT.md 并提交 Git。
